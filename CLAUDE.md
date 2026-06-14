@@ -67,14 +67,16 @@
 state = {
   settings: { theme:'dark'|'light', soundVolume:0..1, bgmPreset:'rain' },
   goals:   [{ id, title, deadline, metric?:{done,target} }],
-  tasks:   [{ id, title, date:'YYYY-MM-DD', done:bool }],
+  tasks:   [{ id, title, date:'YYYY-MM-DD', done:bool, cue?:string }], // cue = if-then きっかけ
   monthGoals: { [YYYY-MM]: { title, subtasks:[{ id, title, taskId?|nodeId? }] } },
   maps:    [{ id:'map_YYYY-MM', title, rootId:'r', month,
              nodes:{ [id]:{ id, text, parentId?, children:[], taskId?, manualDone? } } }],
   cards:   [{ id, front, back, category, tags:[], ease, interval, reps, due:'YYYY-MM-DD' }],
   timer:   { lastDurationMin:25, sessions:[{ t:epochMs, min }] },
   activeTimerTarget: null | { type:'task'|'node', id, mapId?, title },
-  xp: 0, level: 1, streak: 1
+  xp: 0, level: 1, streak: 0, lastActiveDate: null,
+  identity: '',          // なりたい自分（Atomic Habits）。Home に控えめ表示／Settings で編集
+  onboarded: false       // 初回オンボーディング完了フラグ
 }
 ```
 
@@ -126,10 +128,21 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
 - ~~走行中タイマーがタブ切替で消える~~ → モジュールレベル `timerKeep` で保持・復元
   （※ページ完全リロードでの復元は未対応。将来 state 永続化で対応）。
 
-### 残課題（行動科学/体験の核）
+### ✅ フェーズ「行動変容の核 #1」で追加
+- 初回オンボーディング（`Onboarding`、3ステップ・スキップ可）= identity / 目標 / 2分の
+  最初の一歩 + if-then きっかけ。完了で目標1つ＋今日のタスク1つを生成（コールドスタート解消）。
+- タスクの if-then きっかけ（`task.cue`）。Calendar 追加UI + Home/Calendar 一覧に表示。
+- Home のアイデンティティ想起バナー、Settings で identity 編集。
+- `shouldOnboard()` で既存ユーザーにはオンボーディングを出さない。
+- テスト `tests/onboarding.test.mjs`（15件）。
+
+### 残課題（行動科学/体験の核・未着手）
 信頼を損なう残りの注意点:
 - Goals の metric は表示できるが、`metric` を**設定するUIが無い**（常に未設定）。目標と
   タスク/回路の接続も弱い。
+- まだ AI コーチ無し。次の差別化候補。
+- if-then きっかけは現状 task のみ（月間サブタスク/回路ノードには未対応）。
+- 通知・リマインダー無し（if-then の「きっかけ時刻」を活かす余地）。
 
 体験/行動科学（世界一の核・未着手）:
 - AI 機能ゼロ（コーチング・目標分解・具体化・つまずき診断なし）。
