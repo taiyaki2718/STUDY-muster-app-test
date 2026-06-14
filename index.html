@@ -1662,19 +1662,38 @@ function Insight() {
   const { state } = useApp();
   const dnames = ['日', '月', '火', '水', '木', '金', '土'];
   const wThis = state.timer.sessions.reduce((a, s) => a + s.min, 0);
-  
+
+  // 直近7日の実データ（曜日ラベル・分数）。ダミー乱数を廃止して実績を反映。
+  const last7 = useMemo(() => {
+    const days = [];
+    for (let i = 6; i >= 0; i--) {
+      const ds = addDays(today(), -i);
+      const min = state.timer.sessions
+        .filter(s => dstr(new Date(s.t)) === ds)
+        .reduce((a, s) => a + s.min, 0);
+      const dow = dnames[new Date(ds + 'T00:00:00').getDay()];
+      days.push({ ds, min, dow, isToday: ds === today() });
+    }
+    return days;
+  }, [state.timer.sessions]);
+  const maxMin = Math.max(1, ...last7.map(d => d.min));
+  const week7 = last7.reduce((a, d) => a + d.min, 0);
+
   return html`
     <div class="app__inner">
       <div class="glass-panel">
         <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="insight"/></div><div class="holo-label">システム解析</div></div></div>
-        <div class="holo-data text-center mb-4" style="font-size:2rem; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">${wThis} 分</div>
-        <div class="holo-label text-center mb-4">累計集中時間</div>
-        
+        <div class="holo-data text-center" style="font-size:2rem; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">${wThis} 分</div>
+        <div class="holo-label text-center mb-4">累計集中時間 ・ 直近7日 ${week7} 分</div>
+
         <div class="flex-row" style="align-items:flex-end; height: 80px; gap: 8px;">
-           ${dnames.map((d, i) => html`
-             <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;">
-               <div style="width:100%; background: linear-gradient(180deg, var(--holo-cyan), rgba(77,154,236,0.2)); border-radius: 4px; height: ${Math.max(10, Math.random()*80 + 20)}%;"></div>
-               <div class="holo-label">${d}</div>
+           ${last7.map(d => html`
+             <div key=${d.ds} style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;" title="${d.ds}: ${d.min}分">
+               <div style="width:100%; border-radius: 4px; height: ${d.min ? Math.max(8, (d.min / maxMin) * 100) : 4}%;
+                 background: linear-gradient(180deg, var(--holo-cyan), rgba(77,154,236,0.2));
+                 ${d.isToday ? 'box-shadow: 0 0 8px var(--holo-cyan); outline: 1px solid var(--holo-cyan);' : ''}
+                 ${d.min ? '' : 'opacity: 0.35;'}"></div>
+               <div class="holo-label" style="${d.isToday ? 'color: var(--holo-cyan);' : ''}">${d.dow}</div>
              </div>
            `)}
         </div>
