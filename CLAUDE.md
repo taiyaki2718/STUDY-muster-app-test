@@ -94,7 +94,13 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
 - **ビルド不要。** 静的ファイルを配信するだけ。例: リポジトリ直下で
   `python3 -m http.server 8000` → `http://localhost:8000/index.html`。
   （SW・importmap・PWA を正しく動かすため file:// ではなく HTTP で開くこと。）
-- **テスト**: 現状なし（テストランナー未導入）。
+- **テスト**: 純ロジックの回帰テストを `tests/` に追加。`node tests/streak.test.mjs`
+  と `node tests/insight.test.mjs` で実行（ランナー不要、Node のみ）。
+  ※ 現状テストはアプリ本体のロジックを「ミラー」している（単一HTMLで export 不可のため）。
+  将来、純ロジックを別モジュールへ抽出して二重管理を解消する。
+- **ブラウザ実機確認**: この実行環境はネットワークポリシーにより Playwright の
+  ブラウザDLと esm.sh への直アクセス(curl)がブロックされる。実画面のスクリーンショット
+  確認はローカル/CIで `python3 -m http.server` + ブラウザで行うこと。
 - **デプロイ**: 静的ホスティング（GitHub Pages 等）にファイルを置くだけ。
 - 初回はオンラインで esm.sh から Preact/htm を取得（以降 SW がオフライン供給）。
 
@@ -107,22 +113,29 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
 - データ主権（localStorage + JSON エクスポート/インポート、送信なし＝プライバシー良好）。
 - 「思考回路」による目標分解の可視化は、世界一に向けた差別化の核になり得る。
 
-## 8. 既知の不具合 / 負債（フェーズ1で発見・未修正）
+## 8. 既知の不具合 / 負債
 
-信頼を損なう/壊れている:
-- **ストリークが常に 1**。インクリメントするロジックが無い（home/insight で「連続達成日数」が偽値）。
-- **Insight の週次バーが `Math.random()`** ＝ 実データではなくランダムなダミー。
-- 未定義アイコンが silent fallback: `Home` の `n="spark"`、`Timer` の `n="clock"` は
-  `ICONS` に無く、既定の `core` が描画される。
-- `branch` アイコンの SVG が壊れている（`<path d="M6" y1=... />` は不正）。
-- `Goals` の metric バーが使う CSS クラス `.line-bar-wrap/.line-bar-fill` が**未定義**＝表示されない。
-- **走行中タイマーがタブ切替で消える**（`Timer` がアンマウントされ、ローカル state の
-  running/残り時間が失われる。永続化なし）。
+### ✅ フェーズ「基盤の安定化」で修正済み（commit 履歴参照）
+- ~~ストリークが常に 1~~ → 活動駆動 + グレースデーの実ロジック（`bumpStreak`/`reconcileStreak`、
+  テスト `tests/streak.test.mjs`）。
+- ~~Insight の週次バーが `Math.random()`~~ → `timer.sessions` から直近7日の実集中時間を集計
+  （テスト `tests/insight.test.mjs`）。
+- ~~未定義アイコン `spark`/`clock`~~ → ICONS に追加。
+- ~~`branch` アイコン SVG が不正~~ → 正しい git-branch SVG に修正。
+- ~~`.line-bar-wrap/.line-bar-fill` 未定義~~ → CSS 追加で Goals の metric バーが表示。
+- ~~走行中タイマーがタブ切替で消える~~ → モジュールレベル `timerKeep` で保持・復元
+  （※ページ完全リロードでの復元は未対応。将来 state 永続化で対応）。
 
-体験/行動科学（世界一の核）の不足:
+### 残課題（行動科学/体験の核）
+信頼を損なう残りの注意点:
+- Goals の metric は表示できるが、`metric` を**設定するUIが無い**（常に未設定）。目標と
+  タスク/回路の接続も弱い。
+
+体験/行動科学（世界一の核・未着手）:
 - AI 機能ゼロ（コーチング・目標分解・具体化・つまずき診断なし）。
 - 実行意図（if-then）、習慣スタッキング、2分ルール、振り返り/ジャーナル、通知 ── いずれも無し。
 - **オンボーディング無し**＝初回は全画面が空。最初の一歩までの摩擦が最大。
+- 次の推奨: 実行意図(if-then) + 2分ルールの最初の一歩オンボーディング（Top1/Top2 を同時攻略）。
 
 品質/横断:
 - テスト・Lint・型・ビルド無し。全コードが単一 1,785 行ファイル。
