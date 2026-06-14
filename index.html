@@ -1191,6 +1191,11 @@ function ActionModal({ node, map, onClose, go }) {
 }
 
 // ----- TIMER -----
+// 走行中タイマーの状態を、タブ切替で Timer がアンマウントされても保持するための
+// モジュールレベルの保管庫。これが無いと別タブに移った瞬間に進行中のセッションが消える。
+// （ページ完全リロードまでは保持しない。それは将来 state 永続化で対応。）
+let timerKeep = null;
+
 function Timer() {
   const { state, dispatch, addToast } = useApp();
   const [dur, setDur] = useState(state.timer.lastDurationMin || 25);
@@ -1203,7 +1208,29 @@ function Timer() {
   const fillRef = useRef(null);
   const timeTxtRef = useRef(null);
   const lastSecRef = useRef(-1);
-  
+  const liveRef = useRef(null);
+  // 毎レンダーで最新値を保持し、アンマウント時の cleanup から参照する。
+  liveRef.current = { dur, running, timeLeft, endTime: endRef.current };
+
+  // マウント時に保管庫から復元し、アンマウント時に最新状態を保管する。
+  useEffect(() => {
+    const k = timerKeep;
+    if (k) {
+      setDur(k.dur);
+      if (k.running && k.endTime) {
+        const left = (k.endTime - Date.now()) / 1000;
+        if (left > 0) { setTimeLeft(left); setRunning(true); }
+        else { setTimeLeft(k.dur * 60); }
+      } else {
+        setTimeLeft(k.timeLeft && k.timeLeft > 0 ? k.timeLeft : k.dur * 60);
+      }
+    }
+    return () => {
+      const l = liveRef.current;
+      timerKeep = { dur: l.dur, running: l.running, timeLeft: l.timeLeft, endTime: l.endTime };
+    };
+  }, []);
+
   const aTarget = state.activeTimerTarget;
 
   const handleTargetChange = (e) => {
@@ -1240,7 +1267,7 @@ function Timer() {
   }, []);
 
   const finish = useCallback(() => {
-    setRunning(false); setTimeLeft(0); AudioEngine.chime();
+    setRunning(false); setTimeLeft(0); endRef.current = 0; timerKeep = null; AudioEngine.chime();
     dispatch({ type: 'LOG_SESSION', durationMin: dur });
     addToast('セッション完了', 'success');
     if(aTarget && !isTargetDone && confirm(`[${targetTitle}] を完了にしますか？`)) {
@@ -1256,6 +1283,7 @@ function Timer() {
     }
     
     const targetTime = Date.now() + timeLeft * 1000;
+    endRef.current = targetTime; // アンマウント時に残り時間を再計算できるよう終了時刻を保持
     const totalSecs = dur * 60;
 
     const tick = () => {
