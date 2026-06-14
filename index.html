@@ -518,6 +518,7 @@ const pad = n => String(n).padStart(2, '0');
 const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 const today = () => dstr(new Date());
 const addDays = (ds, n) => { const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + n); return dstr(d); };
+const dayDiff = (a, b) => Math.round((new Date(b + 'T00:00:00') - new Date(a + 'T00:00:00')) / 86400000);
 const fmtClock = secs => `${pad(Math.floor(secs / 60))}:${pad(Math.floor(secs % 60))}`;
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -624,14 +625,49 @@ function seed() {
     cards: [],
     timer: { lastDurationMin: 25, sessions: [] },
     activeTimerTarget: null,
-    xp: 0, level: 1, streak: 1
+    xp: 0, level: 1, streak: 0, lastActiveDate: null
   };
+}
+
+/* ------------------------------------------------------------
+   Streak with a grace day ("二度は休まない" rule)
+   - 連続で記録すれば +1。1日だけ空けても継続は途切れない（グレース）。
+   - 2日以上連続で空けたら 1 から再スタート。
+   - 「活動した日」= タスク完了・集中セッション記録・カード復習 のいずれか。
+   bumpStreak は活動が起きた瞬間にだけ呼ぶ。reconcileStreak はアプリ起動時に
+   「もう途切れている」場合だけ表示を 0 に戻す（嘘をつかないため）。
+   ------------------------------------------------------------ */
+function bumpStreak(state) {
+  const t = today();
+  const last = state.lastActiveDate;
+  if (last === t) return state; // 今日はもう加算済み
+  let streak;
+  if (!last) {
+    streak = 1;
+  } else {
+    const gap = dayDiff(last, t);
+    if (gap === 1 || gap === 2) streak = (state.streak || 0) + 1; // 連続 or 1日グレース
+    else streak = 1; // 2日以上空いた → 再スタート
+  }
+  return { ...state, streak, lastActiveDate: t };
+}
+
+function reconcileStreak(state) {
+  if (!state || !state.lastActiveDate) return state;
+  const gap = dayDiff(state.lastActiveDate, today());
+  // 1日（昨日）や2日（グレース）はまだ生きている。3日以上空いたら途切れ。
+  if (gap >= 3 && state.streak !== 0) return { ...state, streak: 0 };
+  return state;
 }
 
 function reducer(state, a) {
   switch (a.type) {
-    case 'TOGGLE_TASK':
-      return { ...state, tasks: state.tasks.map(tk => tk.id === a.id ? { ...tk, done: !tk.done } : tk) };
+    case 'TOGGLE_TASK': {
+      const target = state.tasks.find(tk => tk.id === a.id);
+      const becomingDone = target && !target.done;
+      const next = { ...state, tasks: state.tasks.map(tk => tk.id === a.id ? { ...tk, done: !tk.done } : tk) };
+      return becomingDone ? bumpStreak(next) : next;
+    }
     case 'ADD_TASK':
       return { ...state, tasks: [...state.tasks, a.task] };
     case 'DELETE_TASK':
@@ -720,16 +756,16 @@ function reducer(state, a) {
         
         return { ...c, ease, interval, reps, due: addDays(today(), interval) };
       });
-      return { ...state, cards, xp: state.xp + 5 };
+      return bumpStreak({ ...state, cards, xp: state.xp + 5 });
     }
 
-    case 'LOG_SESSION': 
-      return { 
-        ...state, 
-        xp: state.xp + (a.durationMin * 10), 
+    case 'LOG_SESSION':
+      return bumpStreak({
+        ...state,
+        xp: state.xp + (a.durationMin * 10),
         level: Math.floor(Math.sqrt((state.xp + a.durationMin * 10) / 100)) + 1,
         timer: { ...state.timer, sessions: [...state.timer.sessions, { t: Date.now(), min: a.durationMin }] }
-      };
+      });
     
     case 'SET_ACTIVE_TIMER_TARGET': return { ...state, activeTimerTarget: a.target };
     case 'SET_SETTINGS': return { ...state, settings: { ...state.settings, ...a.patch } };
@@ -1721,7 +1757,11 @@ const TABS = [
 
 function App() {
   const [state, dispatch] = useReducer(reducer, undefined, () => {
-    try { const r = localStorage.getItem(STORE_KEY); return r ? JSON.parse(r) : seed(); } catch(e){ return seed(); }
+    try {
+      const r = localStorage.getItem(STORE_KEY);
+      const loaded = r ? { ...seed(), ...JSON.parse(r) } : seed();
+      return reconcileStreak(loaded);
+    } catch(e){ return seed(); }
   });
   const [tab, setTab] = useState('home');
   const [toasts, setToasts] = useState([]);
