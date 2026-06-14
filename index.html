@@ -1,0 +1,1785 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>GoalFlow: Holographic OS</title>
+<meta name="theme-color" content="#060B14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<!-- PWA: Installable / Home Screen / Offline -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="application-name" content="GoalFlow">
+<meta name="apple-mobile-web-app-title" content="GoalFlow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/icon-180.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
+<link rel="apple-touch-startup-image" href="icons/icon-512.png">
+<style>
+/* ============================================================
+   GoalFlow - Holographic UI / Liquid Glassmorphism
+   Ultra-clean geometric design, Post-text interface
+   ============================================================ */
+
+:root {
+  --holo-blue: #4D9AEC;
+  --holo-cyan: #4FD1C5;
+  --holo-white: #FFFFFF;
+  --holo-silver: #A0AEC0;
+  
+  --bg-core: #060B14;
+  --text-main: #E2E8F0;
+  --text-muted: #8AA2BC;
+  
+  --glass-bg: rgba(16, 28, 48, 0.4);
+  --glass-border: rgba(100, 180, 255, 0.15);
+  --glass-highlight: rgba(140, 200, 255, 0.2);
+  --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.5);
+  
+  --glow-cyan: 0 0 20px rgba(79, 209, 197, 0.5);
+  --glow-blue: 0 0 30px rgba(77, 154, 236, 0.6);
+  
+  --danger: #E53E3E;
+  --success: #38A169;
+  --font-main: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, sans-serif;
+  --font-mono: "SF Mono", Consolas, monospace;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --text-cyan: var(--holo-cyan);
+  --text-glow-cyan: var(--glow-cyan);
+}
+
+/* ホログラフィック・ホワイト (Light Mode) */
+[data-theme="light"] {
+  --bg-core: #F5F9FD;
+  --text-main: #1A2B4C;
+  --text-muted: #6482A5;
+  
+  --glass-bg: rgba(255, 255, 255, 0.65);
+  --glass-border: rgba(255, 255, 255, 1);
+  --glass-highlight: rgba(255, 255, 255, 0.8);
+  --glass-shadow: 0 10px 40px rgba(77, 154, 236, 0.15);
+  
+  --glow-cyan: 0 0 20px rgba(79, 209, 197, 0.3);
+  --glow-blue: 0 0 25px rgba(77, 154, 236, 0.35);
+
+  --text-cyan: #285E61; 
+  --text-glow-cyan: none;
+}
+
+/* Reset & Mobile Bounce Lock */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html {
+  height: 100%; overflow: hidden;
+  background-color: var(--bg-core);
+  /* Full holographic background painted on the ROOT element so it propagates to
+     the canvas, which covers the ENTIRE physical screen (incl. the iOS home-bar
+     strip) far more reliably than any fixed-positioned layer. A baked-in bottom
+     fade melts the lower edge into solid bg-core, making it pixel-identical to
+     the solid strip iOS paints there → zero visible seam. */
+  background-image:
+    linear-gradient(to bottom, transparent 78%, var(--bg-core) 91%),
+    radial-gradient(circle at 15% 20%, rgba(79, 209, 197, 0.15), transparent 50%),
+    radial-gradient(circle at 85% 80%, rgba(77, 154, 236, 0.15), transparent 50%),
+    repeating-linear-gradient(0deg, transparent 0 40px, rgba(120, 180, 255, 0.025) 40px 41px),
+    repeating-linear-gradient(90deg, transparent 0 40px, rgba(120, 180, 255, 0.025) 40px 41px);
+  transition: background-color 0.4s var(--ease);
+}
+body {
+  position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+  font-family: var(--font-main); color: var(--text-main); background-color: transparent;
+  overflow: hidden; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  transition: color 0.4s var(--ease);
+}
+
+/* App Layout */
+#app { display: flex; flex-direction: column; height: 100%; width: 100%; position: relative; overflow: hidden; }
+.app__main {
+  height: 100%; width: 100%; overflow-y: auto; overflow-x: hidden;
+  padding: calc(24px + env(safe-area-inset-top)) 20px calc(88px + env(safe-area-inset-bottom));
+  -webkit-overflow-scrolling: touch; scroll-behavior: smooth;
+}
+.app__inner { max-width: 600px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+
+/* Floating Navigation (見切れ防止・均等配置) */
+.nav {
+  position: fixed; bottom: calc(8px + env(safe-area-inset-bottom)); left: 50%; transform: translateX(-50%); z-index: 100;
+  display: flex; align-items: center; justify-content: space-between;
+  width: calc(100% - 24px); max-width: 480px;
+  padding: 8px 16px; border-radius: 99px; gap: 4px;
+  background: var(--glass-bg); backdrop-filter: blur(28px) saturate(140%); -webkit-backdrop-filter: blur(28px) saturate(140%);
+  border: 1px solid var(--glass-border); border-top: 1px solid var(--glass-highlight); box-shadow: var(--glass-shadow), 0 20px 40px rgba(0,0,0,0.15);
+  overflow-x: auto; -webkit-overflow-scrolling: touch; -ms-overflow-style: none; scrollbar-width: none;
+}
+.nav::-webkit-scrollbar { display: none; }
+.nav__item {
+  flex: 0 0 auto; width: 42px; height: 42px; min-width: 42px; border-radius: 50%; display: grid; place-items: center;
+  color: var(--text-muted); cursor: pointer; transition: all 0.3s var(--ease); position: relative;
+}
+.nav__item:hover { color: var(--text-main); }
+.nav__item.is-active {
+  color: var(--holo-cyan); background: rgba(79, 209, 197, 0.15);
+  box-shadow: inset 0 0 10px rgba(79, 209, 197, 0.2); filter: drop-shadow(0 0 4px rgba(79, 209, 197, 0.4));
+}
+
+/* Theme Toggle Button (Top Right) */
+.theme-toggle {
+  position: fixed; top: calc(20px + env(safe-area-inset-top)); right: 20px; z-index: 150;
+  width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--glass-bg); backdrop-filter: blur(20px); border: 1px solid var(--glass-border);
+  color: var(--text-main); cursor: pointer; box-shadow: var(--glass-shadow); transition: all 0.3s var(--ease);
+}
+.theme-toggle:active { transform: scale(0.9); }
+
+/* Glass Panels */
+.glass-panel {
+  background: var(--glass-bg); backdrop-filter: blur(24px) saturate(130%); -webkit-backdrop-filter: blur(24px) saturate(130%);
+  border: 1px solid var(--glass-border); border-top: 1px solid var(--glass-highlight); border-left: 1px solid var(--glass-highlight);
+  border-radius: 24px; padding: 24px; box-shadow: var(--glass-shadow); position: relative; overflow: hidden;
+  transition: background 0.4s, border-color 0.4s, box-shadow 0.4s;
+}
+.glass-panel--sm { padding: 18px; border-radius: 18px; }
+
+/* Real-time Holographic Clock */
+.holo-clock-panel {
+  background: rgba(16, 28, 48, 0.3); border: 1px solid var(--glass-border); border-radius: 24px; padding: 20px;
+  backdrop-filter: blur(10px); box-shadow: var(--glow-blue), inset 0 0 15px rgba(77, 154, 236, 0.2);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+[data-theme="light"] .holo-clock-panel {
+  background: rgba(255, 255, 255, 0.4); box-shadow: 0 0 20px rgba(77,154,236,0.2), inset 0 0 15px rgba(255,255,255,0.6);
+}
+.holo-clock-time {
+  font-family: "Courier New", Courier, monospace; font-size: 3rem; font-weight: 300; color: var(--holo-white);
+  text-shadow: 0 0 10px rgba(255,255,255,0.6), 0 0 20px var(--holo-cyan), 0 0 40px var(--holo-blue);
+  letter-spacing: 0.1em; line-height: 1;
+}
+[data-theme="light"] .holo-clock-time { color: var(--text-cyan); text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(79, 209, 197, 0.5); }
+.holo-clock-date { font-size: 0.85rem; letter-spacing: 0.2em; color: var(--holo-cyan); text-shadow: var(--glow-cyan); margin-top: 6px; font-weight: 600; }
+[data-theme="light"] .holo-clock-date { color: var(--text-cyan); text-shadow: none; }
+
+/* UI Primitives */
+.module-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.holo-icon-group { display: flex; align-items: center; gap: 12px; }
+.holo-icon {
+  width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center;
+  background: rgba(77, 154, 236, 0.15); color: var(--holo-blue); border: 1px solid rgba(77, 154, 236, 0.3); box-shadow: var(--glow-blue);
+  flex-shrink: 0;
+}
+.holo-data { font-family: var(--font-mono); font-size: 1.3rem; font-weight: 600; letter-spacing: 0.05em; }
+.holo-label { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 700; margin-top: 6px; }
+
+/* Glass Buttons & Inputs */
+.glass-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 14px 20px; border-radius: 16px; font-weight: 600; font-size: 0.95rem;
+  background: rgba(120,180,255,0.1); border: 1px solid var(--glass-border); color: var(--text-main); cursor: pointer; transition: all 0.2s var(--ease); backdrop-filter: blur(10px);
+}
+[data-theme="light"] .glass-btn { background: rgba(255,255,255,0.7); }
+.glass-btn:active { transform: scale(0.96); }
+
+.glass-btn--primary { 
+  background: linear-gradient(135deg, rgba(77,154,236,0.8), rgba(79,209,197,0.8)); 
+  color: #ffffff !important; border-color: rgba(255,255,255,0.6); 
+  box-shadow: 0 8px 20px rgba(77,154,236,0.3), inset 0 1px 0 rgba(255,255,255,0.5); 
+}
+[data-theme="light"] .glass-btn--primary {
+  background: linear-gradient(135deg, rgba(77,154,236,0.95), rgba(79,209,197,0.95)) !important;
+  color: #ffffff !important;
+}
+
+.glass-btn--danger { color: var(--danger); border-color: rgba(229, 62, 62, 0.3); }
+[data-theme="light"] .glass-btn--danger { background: rgba(229, 62, 62, 0.1); color: var(--danger); }
+
+.glass-btn--icon { width: 48px; height: 48px; padding: 0; border-radius: 50%; flex-shrink: 0; }
+.glass-btn--block { width: 100%; }
+
+.glass-input, .glass-select, .glass-textarea {
+  width: 100%; padding: 14px 18px; border-radius: 14px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border);
+  color: var(--text-main); font-family: var(--font-main); font-size: 1rem; transition: all 0.2s;
+}
+[data-theme="light"] .glass-input, [data-theme="light"] .glass-select, [data-theme="light"] .glass-textarea { background: rgba(255,255,255,0.6); color: #1A2B4C;}
+.glass-select option { background: var(--bg-core); color: var(--text-main); }
+
+.glass-textarea { resize: vertical; min-height: 80px; }
+.glass-input:focus, .glass-select:focus, .glass-textarea:focus { outline: none; border-color: var(--holo-cyan); box-shadow: var(--glow-cyan); background: rgba(0,0,0,0.3); }
+[data-theme="light"] .glass-input:focus, [data-theme="light"] .glass-select:focus { background: #fff; }
+.glass-input::placeholder, .glass-textarea::placeholder { color: var(--text-muted); }
+
+/* Holo Lists & Checkboxes */
+.holo-list { display: flex; flex-direction: column; gap: 12px; }
+.holo-item {
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-radius: 16px;
+  background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); transition: all 0.2s;
+}
+[data-theme="light"] .holo-item { background: rgba(255,255,255,0.6); border-color: var(--glass-border); }
+.holo-item.is-done { opacity: 0.5; filter: grayscale(1); }
+.holo-item__text { flex: 1; font-weight: 500; font-size: 0.95rem; }
+.holo-checkbox { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--text-muted); display: grid; place-items: center; color: transparent; transition: 0.2s; cursor: pointer; flex-shrink: 0; }
+.holo-checkbox.is-on { background: var(--holo-cyan); border-color: var(--holo-cyan); color: #fff; box-shadow: var(--glow-cyan); }
+
+/* SVG Radial Progress */
+.radial-progress { transform: rotate(-90deg); filter: drop-shadow(0 0 6px rgba(79, 209, 197, 0.4)); }
+.radial-bg { fill: none; stroke: rgba(255,255,255,0.1); }
+[data-theme="light"] .radial-bg { stroke: rgba(0,0,0,0.1); }
+.radial-fg { fill: none; stroke: var(--holo-cyan); stroke-linecap: round; transition: stroke-dashoffset 0.8s var(--ease); }
+
+/* ----- 1. Goal Core (Home) ----- */
+.goal-core-wrapper { position: relative; height: 260px; display: flex; align-items: center; justify-content: center; margin: 10px 0; }
+.goal-core { position: relative; width: 160px; height: 160px; display: grid; place-items: center; }
+
+/* Orbit Lines */
+.core-orbit { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); border-radius: 50%; border: 1px solid rgba(255,255,255,0.1); pointer-events: none;}
+[data-theme="light"] .core-orbit { border: 1px solid rgba(77, 154, 236, 0.4); }
+
+.core-orbit-1 { width: 220px; height: 220px; border-top: 2px solid var(--holo-cyan); animation: spin 10s linear infinite; }
+[data-theme="light"] .core-orbit-1 { border-top: 2px solid var(--text-cyan); }
+.core-orbit-2 { width: 280px; height: 280px; border-bottom: 2px solid var(--holo-blue); border-left: 2px solid var(--holo-blue); animation: spin 15s linear infinite reverse; }
+[data-theme="light"] .core-orbit-2 { border-bottom: 2px solid var(--holo-blue); border-left: 2px solid var(--holo-blue); }
+
+.core-sphere {
+  width: 120px; height: 120px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, rgba(255,255,255,0.9), var(--holo-blue));
+  box-shadow: 0 0 40px rgba(77,154,236,0.5), inset 0 0 20px rgba(255,255,255,1); display: flex; flex-direction: column; align-items: center; justify-content: center; color: #fff; z-index: 10;
+  animation: float 4s ease-in-out infinite; border: 1px solid rgba(255,255,255,0.8);
+}
+[data-theme="light"] .core-sphere {
+  background: radial-gradient(circle at 30% 30%, #FFFFFF, rgba(77, 154, 236, 0.2));
+  color: var(--text-main); box-shadow: 0 0 30px rgba(77,154,236,0.3), inset 0 0 20px rgba(255,255,255,0.8);
+}
+
+.core-level { font-family: var(--font-mono); font-size: 2.2rem; font-weight: 300; text-shadow: 0 2px 10px rgba(0,0,0,0.2); line-height: 1; }
+[data-theme="light"] .core-level { text-shadow: none; font-weight: 500; }
+
+.core-stats { position: absolute; bottom: 0; display: flex; gap: 24px; }
+.core-stat-badge { display: flex; align-items: center; gap: 6px; background: var(--glass-bg); backdrop-filter: blur(10px); padding: 6px 12px; border-radius: 99px; border: 1px solid var(--glass-border); font-family: var(--font-mono); font-size: 0.8rem; font-weight: 600; }
+@keyframes spin { 100% { transform: translate(-50%, -50%) rotate(360deg); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+
+/* ----- 2. Circuit Map ----- */
+.circuit-container {
+  position: relative; width: 100%; height: 420px; background: rgba(0,0,0,0.2); border-radius: 20px; overflow: hidden;
+  border: 1px solid var(--glass-border); box-shadow: inset 0 0 20px rgba(0,0,0,0.5); overflow-x: auto; overflow-y: auto;
+}
+[data-theme="light"] .circuit-container { background: rgba(255,255,255,0.3); box-shadow: inset 0 0 20px rgba(0,0,0,0.05); }
+.circuit-svg { position: absolute; top: 0; left: 0; pointer-events: none; }
+.circuit-path { fill: none; stroke: rgba(160,174,192,0.3); stroke-width: 2px; stroke-linecap: round; stroke-linejoin: round; transition: all 0.5s; }
+.circuit-path.is-active { stroke: var(--holo-cyan); stroke-width: 3px; stroke-dasharray: 8 12; animation: energyFlow 1.2s linear infinite; filter: drop-shadow(0 0 6px var(--holo-cyan)); }
+@keyframes energyFlow { from { stroke-dashoffset: 40; } to { stroke-dashoffset: 0; } }
+
+.circuit-node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 10; }
+.node-crystal {
+  width: 34px; height: 34px; transform: rotate(45deg); background: var(--glass-bg); backdrop-filter: blur(4px);
+  border: 2px solid var(--glass-border); box-shadow: 0 0 10px rgba(0,0,0,0.1); cursor: pointer; transition: all 0.3s; display: grid; place-items: center; color: transparent;
+}
+.node-crystal > svg { transform: rotate(-45deg); width: 16px; height: 16px; color: var(--text-muted); transition: 0.3s;}
+.node-crystal:hover { transform: rotate(45deg) scale(1.15); border-color: var(--holo-blue); box-shadow: var(--glow-blue);}
+.node-crystal.is-done { background: rgba(79, 209, 197, 0.25); border-color: var(--holo-cyan); box-shadow: var(--glow-cyan); }
+.node-crystal.is-done > svg { color: var(--holo-cyan); }
+.node-crystal.is-root { width: 56px; height: 56px; border-radius: 50%; transform: none; background: var(--holo-blue); border: none; box-shadow: 0 0 25px rgba(77, 154, 236, 0.6); }
+.node-crystal.is-root > svg { transform: none; color: #fff; width: 28px; height: 28px; }
+.node-crystal.is-root.is-done { background: var(--holo-cyan); box-shadow: 0 0 30px rgba(79, 209, 197, 0.8); }
+.node-label { font-size: 0.75rem; font-weight: 600; background: var(--glass-bg); backdrop-filter: blur(10px); padding: 4px 10px; border-radius: 8px; border: 1px solid var(--glass-border); white-space: nowrap; }
+
+/* ----- 3. Water Timer (Extremely Pale & Smooth) ----- */
+.water-wrap {
+  position: relative; width: min(76vw, 300px); aspect-ratio: 1; border-radius: 50%;
+  background: rgba(0,0,0,0.3); overflow: hidden; border: 4px solid var(--glass-border);
+  box-shadow: 0 0 40px rgba(77, 154, 236, 0.2), inset 0 0 40px rgba(0,0,0,0.5); margin: 0 auto;
+}
+[data-theme="light"] .water-wrap { background: rgba(255,255,255,0.4); box-shadow: 0 0 40px rgba(77, 154, 236, 0.2), inset 0 0 20px rgba(0,0,0,0.1); }
+
+.water-fill {
+  position: absolute; left: -5%; right: -5%; bottom: -5%; width: 110%; height: 110%;
+  transform-origin: bottom; transition: none; will-change: transform; overflow: hidden;
+  background: linear-gradient(180deg,
+    rgba(140,240,228,0.11) 0%,
+    rgba(79,209,197,0.15) 30%,
+    rgba(77,154,236,0.19) 66%,
+    rgba(96,132,242,0.29) 100%);
+  box-shadow: inset 0 40px 60px -30px rgba(190,255,250,0.30);
+}
+/* 揺らめく光（コースティクス）— 水中の光。網目の代わり */
+.water-fill::before {
+  content: ''; position: absolute; inset: -30%; pointer-events: none;
+  background:
+    radial-gradient(ellipse 55% 38% at 28% 24%, rgba(195,255,250,0.30), transparent 62%),
+    radial-gradient(ellipse 50% 32% at 74% 50%, rgba(150,225,255,0.22), transparent 60%),
+    radial-gradient(ellipse 42% 30% at 48% 80%, rgba(120,205,255,0.16), transparent 62%);
+  filter: blur(12px);
+  animation: caustics 9s ease-in-out infinite alternate;
+}
+@keyframes caustics {
+  0%   { transform: translate(0,0) scale(1); opacity: 0.8; }
+  100% { transform: translate(8%, -6%) scale(1.14); opacity: 1; }
+}
+/* 斜めのガラス的な反射（ホログラム感） */
+.water-fill::after {
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.10) 48%, transparent 60%);
+  mix-blend-mode: screen;
+}
+[data-theme="light"] .water-fill { background: linear-gradient(180deg, rgba(79,209,197,0.16), rgba(77,154,236,0.22), rgba(77,154,236,0.30)); }
+
+.water-fill .wave { position: absolute; top: -19px; left: 0; width: 200%; height: 26px; display: block; }
+.wave--a { animation: waveflow 6s linear infinite; fill: rgba(150,245,232,0.6); filter: drop-shadow(0 0 7px rgba(79,209,197,0.7)); }
+.wave--b { animation: waveflow 4.2s linear infinite reverse; top: -12px; fill: rgba(96,168,240,0.45); }
+
+/* 立ち上る気泡 */
+.water-fill .bubble {
+  position: absolute; bottom: -4%; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255,255,255,0.95), rgba(190,245,255,0.35) 55%, transparent 75%);
+  box-shadow: 0 0 6px rgba(190,245,255,0.5);
+  opacity: 0; pointer-events: none; animation: rise linear infinite;
+}
+@keyframes rise {
+  0%   { transform: translateY(0) scale(0.5); opacity: 0; }
+  12%  { opacity: 0.85; }
+  80%  { opacity: 0.55; }
+  100% { transform: translateY(-340px) scale(1.05); opacity: 0; }
+}
+
+/* Hologram Timer Text */
+.timer-face { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; pointer-events: none;}
+.timer-display-box {
+  background: rgba(16, 28, 48, 0.3); border: 1px solid rgba(79, 209, 197, 0.3);
+  padding: 12px 28px; border-radius: 16px; backdrop-filter: blur(8px);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3), inset 0 0 20px rgba(79, 209, 197, 0.1);
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+}
+[data-theme="light"] .timer-display-box {
+  background: rgba(255, 255, 255, 0.4); border-color: rgba(79, 209, 197, 0.5);
+  box-shadow: 0 4px 20px rgba(77,154,236,0.1), inset 0 0 20px rgba(79, 209, 197, 0.1);
+}
+.timer-time { 
+  font-family: "Courier New", Courier, monospace; font-size: 3.8rem; font-weight: 300; 
+  color: #fff; line-height: 1; letter-spacing: 0.05em; margin: 0;
+  text-shadow: 0 0 10px rgba(255,255,255,0.6), 0 0 20px var(--holo-cyan), 0 0 40px var(--holo-blue);
+}
+[data-theme="light"] .timer-time { color: var(--text-cyan); text-shadow: 0 0 10px rgba(255, 255, 255, 0.8), 0 0 20px rgba(79, 209, 197, 0.5); }
+[data-theme="light"] .zen__time { color: var(--text-cyan); text-shadow: 0 0 10px rgba(255,255,255,0.8), 0 0 20px rgba(79,209,197,0.5); }
+
+/* Start Button Holographic */
+.holo-btn-start {
+  position: relative; width: 72px; height: 72px; border-radius: 50%;
+  background: linear-gradient(135deg, rgba(79, 209, 197, 0.2), rgba(77, 154, 236, 0.2));
+  backdrop-filter: blur(12px); border: 1px solid rgba(79, 209, 197, 0.5);
+  display: grid; place-items: center; color: var(--holo-cyan);
+  box-shadow: 0 0 20px rgba(79, 209, 197, 0.4), inset 0 0 20px rgba(79, 209, 197, 0.3);
+  cursor: pointer; transition: all 0.3s var(--ease);
+}
+[data-theme="light"] .holo-btn-start {
+  background: linear-gradient(135deg, rgba(79, 209, 197, 0.1), rgba(77, 154, 236, 0.1));
+  color: var(--text-cyan); border-color: var(--text-cyan);
+  box-shadow: 0 0 20px rgba(79, 209, 197, 0.3), inset 0 0 15px rgba(79, 209, 197, 0.2);
+}
+.holo-btn-start:hover { transform: scale(1.05); box-shadow: 0 0 30px rgba(79, 209, 197, 0.6), inset 0 0 20px rgba(79, 209, 197, 0.4); }
+.holo-btn-start:active { transform: scale(0.95); }
+
+@keyframes waveflow { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+
+/* Audio Selector Grid */
+.audio-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
+.audio-card { padding: 16px; border-radius: 16px; background: rgba(0,0,0,0.2); border: 1px solid rgba(255,255,255,0.05); display: flex; flex-direction: column; align-items: center; gap: 8px; cursor: pointer; transition: 0.2s; }
+[data-theme="light"] .audio-card { background: rgba(255,255,255,0.5); border-color: var(--glass-border); }
+.audio-card:hover { background: rgba(255,255,255,0.1); }
+.audio-card.is-active { background: rgba(77,154,236,0.15); border-color: var(--holo-blue); box-shadow: var(--glow-blue); color: var(--holo-cyan); }
+.audio-card.is-active svg { color: var(--holo-cyan); }
+
+/* Utility & Scaffolding */
+.flex-row { display: flex; align-items: center; gap: 12px; }
+.flex-between { display: flex; align-items: center; justify-content: space-between; }
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.mt-4 { margin-top: 16px; } .mb-4 { margin-bottom: 16px; }
+.w-full { width: 100%; } .text-center { text-align: center; }
+
+/* Calendar */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; text-align: center; margin-top: 10px; }
+.cal-dow { font-size: 0.7rem; font-weight: 700; color: var(--text-muted); letter-spacing: 0.1em; }
+.cal-cell { aspect-ratio: 1; border-radius: 12px; display: flex; flex-direction: column; align-items: center; justify-content: center; background: rgba(0,0,0,0.2); border: 1px solid transparent; transition: 0.2s; position: relative; cursor: pointer;}
+[data-theme="light"] .cal-cell { background: rgba(255,255,255,0.5); }
+.cal-cell:hover { border-color: var(--glass-border); }
+.cal-cell.is-selected { border-color: var(--holo-blue); background: rgba(77, 154, 236, 0.2); }
+.cal-cell.is-today { box-shadow: inset 0 0 0 2px var(--holo-cyan); }
+.cal-cell .d { font-size: 0.85rem; font-weight: 600; font-family: var(--font-mono); }
+.cal-dots { display: flex; gap: 3px; position: absolute; bottom: 6px; pointer-events: none;}
+.cal-dot { width: 4px; height: 4px; border-radius: 50%; background: var(--holo-blue); }
+.cal-dot.done { background: var(--holo-cyan); box-shadow: var(--glow-cyan); }
+
+/* Zen (Immersive Focus) Fullscreen */
+.zen { position: fixed; inset: 0; z-index: 300; background: var(--bg-core); overflow: hidden; animation: fade 0.3s var(--ease) both; }
+.zen__fill { position: absolute; left: -5%; right: -5%; bottom: -5%; width: 110%; height: 110%; background: linear-gradient(180deg, rgba(79,209,197,0.25), rgba(77,154,236,0.4), rgba(180,80,255,0.2)); transform-origin: bottom; }
+[data-theme="light"] .zen__fill { background: linear-gradient(180deg, rgba(79, 209, 197, 0.2), rgba(77, 154, 236, 0.3), rgba(77, 154, 236, 0.4)); }
+.zen__fill .wave { position: absolute; top: -23px; left: 0; width: 200%; height: 24px; }
+.zen__close { position: absolute; top: calc(20px + env(safe-area-inset-top)); right: 20px; z-index: 4; }
+.zen__center { position: absolute; inset: 0; z-index: 3; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; pointer-events: none;}
+.zen__center > * { pointer-events: auto; }
+.zen__time { font-family: "Courier New", Courier, monospace; font-size: clamp(4rem, 20vw, 8rem); font-weight: 300; color: #fff; line-height: 1; letter-spacing: 0.05em; text-shadow: 0 0 10px rgba(255,255,255,0.6), 0 0 20px var(--holo-cyan), 0 0 40px var(--holo-blue);}
+
+/* Flashcards (Memory) */
+.flash-stage { display: flex; flex-direction: column; align-items: center; gap: 20px; perspective: 1600px; margin-top: 20px; }
+.flash-card { width: 100%; height: 300px; position: relative; transform-style: preserve-3d; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); cursor: pointer; }
+.flash-card.is-flip { transform: rotateY(180deg); }
+.flash-face {
+  position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+  border-radius: 24px; padding: 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
+  background: var(--glass-bg); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); backdrop-filter: blur(20px);
+}
+.flash-face.is-back { transform: rotateY(180deg); border-color: var(--holo-cyan); }
+.flash-q { font-size: 1.4rem; font-weight: 600; line-height: 1.5; }
+.flash-a { font-size: 1.2rem; font-weight: 600; color: var(--holo-cyan); line-height: 1.5; white-space: pre-wrap; }
+
+/* Modals & Toasts */
+.scrim { position: fixed; inset: 0; z-index: 200; background: rgba(0,0,0,0.6); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); display: flex; flex-direction: column; justify-content: flex-end; animation: fadeIn 0.3s ease; }
+.holo-modal {
+  color: var(--text-main) !important;
+  background: var(--glass-bg); backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%);
+  border-top: 1px solid var(--glass-highlight); border-left: 1px solid var(--glass-border); border-right: 1px solid var(--glass-border);
+  border-radius: 32px 32px 0 0; padding: 24px 20px calc(40vh); max-height: 90dvh; overflow-y: auto; box-shadow: 0 -20px 60px rgba(0,0,0,0.5); animation: slideUp 0.4s var(--ease);
+}
+@media(min-width: 640px) { .scrim { justify-content: center; padding: 20px; } .holo-modal { border-radius: 32px; border-bottom: 1px solid var(--glass-border); padding-bottom: 30px; width: 100%; max-width: 500px; margin: 0 auto; } }
+.modal-grip { width: 40px; height: 5px; border-radius: 10px; background: rgba(255,255,255,0.3); margin: 0 auto 20px; }
+.toasts { position: fixed; top: env(safe-area-inset-top, 20px); left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; width: 90%; max-width: 400px;}
+.holo-toast { background: rgba(16, 28, 48, 0.85); color: #fff; padding: 14px 20px; border-radius: 16px; font-weight: 500; font-size: 0.9rem; display: flex; align-items: center; gap: 12px; border: 1px solid var(--holo-cyan); box-shadow: var(--glow-cyan); backdrop-filter: blur(10px); animation: popIn 0.3s var(--ease); }
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes popIn { 0% { opacity: 0; transform: translateY(-20px) scale(0.9); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "preact": "https://esm.sh/preact@10.19.2",
+    "preact/hooks": "https://esm.sh/preact@10.19.2/hooks",
+    "htm/preact": "https://esm.sh/htm@3.1.1/preact?external=preact"
+  }
+}
+</script>
+</head>
+<body>
+<!-- Audio Source -->
+<audio id="bgm-player" loop playsinline preload="auto"></audio>
+
+<div id="app"></div>
+
+<script type="module">
+import { render, createContext } from 'preact';
+import { useState, useEffect, useReducer, useRef, useMemo, useCallback, useContext, useLayoutEffect } from 'preact/hooks';
+import { html } from 'htm/preact';
+
+/* ============================================================
+   Constants & Utils
+   ============================================================ */
+const STORE_KEY = 'goalflow:v22:holo';
+
+const ICONS = {
+  core: () => html`<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="10" stroke-dasharray="4 4"/>`,
+  grid: () => html`<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/>`,
+  target: () => html`<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/>`,
+  calendar: () => html`<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>`,
+  timer: () => html`<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.6 1.6M9 2.5h6"/>`,
+  branch: () => html`<path d="M6" y1="3" y2="21"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/>`,
+  settings: () => html`<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>`,
+  plus: () => html`<line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>`,
+  check: () => html`<polyline points="20 6 9 17 4 12"/>`,
+  x: () => html`<line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>`,
+  trash: () => html`<polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>`,
+  play: () => html`<polygon points="5 3 19 12 5 21 5 3"/>`,
+  pause: () => html`<rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>`,
+  droplet: () => html`<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>`,
+  sun: () => html`<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>`,
+  moon: () => html`<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>`,
+  music: () => html`<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>`,
+  chevL: () => html`<polyline points="15 18 9 12 15 6"/>`,
+  chevR: () => html`<polyline points="9 18 15 12 9 6"/>`,
+  zap: () => html`<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>`,
+  compress: () => html`<path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/>`,
+  expand: () => html`<path d="M9 4H4v5M15 4h5v5M9 20H4v-5M15 20h5v-5"/>`,
+  layers: () => html`<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>`,
+  insight: () => html`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
+  edit: () => html`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`,
+  search: () => html`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`
+};
+
+function Icon({ n, size = 20 }) {
+  const f = ICONS[n] || ICONS.core;
+  return html`<svg viewBox="0 0 24 24" width=${size} height=${size} fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" style="overflow: visible;">${f()}</svg>`;
+}
+
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const pad = n => String(n).padStart(2, '0');
+const dstr = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => dstr(new Date());
+const addDays = (ds, n) => { const d = new Date(ds + 'T00:00:00'); d.setDate(d.getDate() + n); return dstr(d); };
+const fmtClock = secs => `${pad(Math.floor(secs / 60))}:${pad(Math.floor(secs % 60))}`;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+/* ============================================================
+   Audio Engine
+   ============================================================ */
+const BGM_FILES = [
+  { id: 'rain', nm: 'Rain', src: 'rain_against_the_glass.mp3', ico: 'droplet' },
+  { id: 'notes', nm: 'Notes', src: 'notes_against_the_glass.mp3', ico: 'music' },
+  { id: 'city', nm: 'City Wakes', src: 'before_the_city_wakes.mp3', ico: 'sun' },
+  { id: 'cold', nm: 'Cold', src: 'keeping_out_the_cold.mp3', ico: 'moon' },
+];
+
+const AudioEngine = (() => {
+  let vol = 0.6;
+  let chimeCtx = null;
+
+  function initChime() {
+    if (!chimeCtx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (AC) chimeCtx = new AC();
+    }
+    if (chimeCtx && chimeCtx.state === 'suspended') chimeCtx.resume();
+  }
+
+  return {
+    setVolume(v) { 
+      vol = v; 
+      const el = document.getElementById('bgm-player');
+      if (el) el.volume = v; 
+    },
+    play(id) {
+      initChime();
+      const file = BGM_FILES.find(f => f.id === id);
+      if (!file) return false;
+      
+      const el = document.getElementById('bgm-player');
+      if (!el) return false;
+
+      // One-time diagnostics: surface decode/network errors for the bundled audio files.
+      if (!el.dataset.errHook) {
+        el.dataset.errHook = '1';
+        el.addEventListener('error', () => {
+          const err = el.error;
+          console.warn('Audio load error for', el.currentSrc || el.src, err ? '(code ' + err.code + ')' : '');
+        });
+      }
+      
+      if (el.dataset.currentId !== id) {
+        el.src = file.src;
+        el.dataset.currentId = id;
+        el.load(); // ensure the newly selected bundled track is (re)loaded before playback
+      }
+      el.volume = vol;
+      const p = el.play();
+      if (p !== undefined) {
+        p.catch(e => console.warn('Audio Autoplay Blocked:', e));
+      }
+      return true;
+    },
+    stop() {
+      const el = document.getElementById('bgm-player');
+      if (el) el.pause();
+    },
+    toggle(id) {
+      const el = document.getElementById('bgm-player');
+      if (!el) return false;
+      if (!el.paused && el.dataset.currentId === id) { 
+        this.stop(); return false; 
+      }
+      return this.play(id);
+    },
+    chime() {
+      initChime();
+      if (!chimeCtx) return;
+      try {
+        const osc = chimeCtx.createOscillator(); const gain = chimeCtx.createGain();
+        osc.connect(gain); gain.connect(chimeCtx.destination);
+        osc.type = 'sine'; osc.frequency.setValueAtTime(880, chimeCtx.currentTime);
+        gain.gain.setValueAtTime(0.5, chimeCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.01, chimeCtx.currentTime + 1.5);
+        osc.start(); osc.stop(chimeCtx.currentTime + 1.5);
+      } catch(e) {}
+    },
+    isPlaying(id) {
+      const el = document.getElementById('bgm-player');
+      if (!el) return false;
+      if (id) return !el.paused && el.dataset.currentId === id;
+      return !el.paused;
+    }
+  };
+})();
+
+/* ============================================================
+   State Management (Clean Start)
+   ============================================================ */
+function seed() {
+  return {
+    settings: { theme: 'dark', soundVolume: 0.6, bgmPreset: 'rain' },
+    goals: [],
+    tasks: [],
+    monthGoals: {},
+    maps: [], 
+    cards: [],
+    timer: { lastDurationMin: 25, sessions: [] },
+    activeTimerTarget: null,
+    xp: 0, level: 1, streak: 1
+  };
+}
+
+function reducer(state, a) {
+  switch (a.type) {
+    case 'TOGGLE_TASK':
+      return { ...state, tasks: state.tasks.map(tk => tk.id === a.id ? { ...tk, done: !tk.done } : tk) };
+    case 'ADD_TASK':
+      return { ...state, tasks: [...state.tasks, a.task] };
+    case 'DELETE_TASK':
+      return { ...state, tasks: state.tasks.filter(tk => tk.id !== a.id) };
+    
+    case 'ADD_GOAL': return { ...state, goals: [...state.goals, a.goal] };
+    case 'UPDATE_GOAL': return { ...state, goals: state.goals.map(g => g.id === a.goal.id ? a.goal : g) };
+    case 'DELETE_GOAL': return { ...state, goals: state.goals.filter(g => g.id !== a.id) };
+
+    case 'SET_MONTH_GOAL': {
+      const mg = state.monthGoals[a.month] || { title: '', subtasks: [] };
+      const mapId = `map_${a.month}`;
+      
+      let maps = state.maps || [];
+      maps = maps.map(m => {
+        if(m.id === mapId) {
+          const nm = JSON.parse(JSON.stringify(m));
+          nm.title = a.title || `目標 ${a.month}`;
+          if (nm.nodes && nm.nodes[nm.rootId]) {
+            nm.nodes[nm.rootId].text = a.title || `目標 ${a.month}`;
+          }
+          return nm;
+        }
+        return m;
+      });
+      return { ...state, monthGoals: { ...state.monthGoals, [a.month]: { ...mg, title: a.title } }, maps };
+    }
+    
+    case 'ADD_MONTH_SUBTASK': {
+      const m = a.month; const tkId = uid();
+      const newTask = { id: tkId, title: a.title, date: today(), done: false };
+      const currentMg = state.monthGoals[m] || { title: `目標 ${m}`, subtasks: [] };
+      const newSubtasks = [...currentMg.subtasks, { id: uid(), title: a.title, taskId: tkId }];
+      
+      let maps = state.maps || [];
+      const mapId = `map_${m}`;
+      let map = maps.find(x => x.id === mapId);
+      if (!map) {
+        map = { id: mapId, title: currentMg.title || `目標 ${m}`, rootId: 'r', month: m, nodes: { r: { id: 'r', text: currentMg.title || `目標 ${m}`, children: [] } } };
+        maps = [...maps, map];
+      }
+      const nodeId = uid();
+      const nextMap = JSON.parse(JSON.stringify(map));
+      nextMap.nodes[nodeId] = { id: nodeId, text: a.title, parentId: 'r', children: [], taskId: tkId };
+      nextMap.nodes['r'].children.push(nodeId);
+      
+      return { ...state, tasks: [...state.tasks, newTask], monthGoals: { ...state.monthGoals, [m]: { ...currentMg, subtasks: newSubtasks } }, maps: maps.map(x => x.id === mapId ? nextMap : x) };
+    }
+
+    case 'UPDATE_MAP': return { ...state, maps: state.maps.map(m => m.id === a.map.id ? a.map : m) };
+    case 'TOGGLE_MAP_NODE': {
+      let maps = state.maps.map(m => {
+        if(m.id === a.mapId) {
+          const nm = JSON.parse(JSON.stringify(m));
+          if(nm.nodes[a.nodeId]) {
+            nm.nodes[a.nodeId].manualDone = !nm.nodes[a.nodeId].manualDone;
+          }
+          return nm;
+        }
+        return m;
+      });
+      return { ...state, maps };
+    }
+    
+    case 'ADD_CARD': return { ...state, cards: [...state.cards, a.card] };
+    case 'UPDATE_CARD': return { ...state, cards: state.cards.map(c => c.id === a.card.id ? a.card : c) };
+    case 'DELETE_CARD': return { ...state, cards: state.cards.filter(c => c.id !== a.id) };
+    case 'REVIEW_CARD': {
+      const cards = state.cards.map(c => {
+        if(c.id !== a.id) return c;
+        let { ease = 2.5, interval = 0, reps = 0 } = c;
+        
+        // SM-2 Algorithm based on 4 options (2: Again, 3: Hard, 4: Good, 5: Easy)
+        if (a.grade < 3) { 
+          reps = 0; interval = 1; 
+        } else if (a.grade === 3) {
+          interval = Math.max(1, Math.round(interval * 1.2));
+        } else { 
+          reps += 1; 
+          interval = reps === 1 ? 1 : reps === 2 ? 6 : Math.round(interval * ease); 
+        }
+        
+        if (a.grade === 5) interval = Math.round(interval * 1.3); // Bonus for Easy
+        
+        ease = Math.max(1.3, ease + (0.1 - (5 - a.grade) * (0.08 + (5 - a.grade) * 0.02)));
+        
+        return { ...c, ease, interval, reps, due: addDays(today(), interval) };
+      });
+      return { ...state, cards, xp: state.xp + 5 };
+    }
+
+    case 'LOG_SESSION': 
+      return { 
+        ...state, 
+        xp: state.xp + (a.durationMin * 10), 
+        level: Math.floor(Math.sqrt((state.xp + a.durationMin * 10) / 100)) + 1,
+        timer: { ...state.timer, sessions: [...state.timer.sessions, { t: Date.now(), min: a.durationMin }] }
+      };
+    
+    case 'SET_ACTIVE_TIMER_TARGET': return { ...state, activeTimerTarget: a.target };
+    case 'SET_SETTINGS': return { ...state, settings: { ...state.settings, ...a.patch } };
+    case 'IMPORT': return { ...seed(), ...a.state };
+    default: return state;
+  }
+}
+
+/* ============================================================
+   UI Components
+   ============================================================ */
+const Ctx = createContext(null);
+const useApp = () => useContext(Ctx);
+
+function Check({ on }) {
+  return html`<div class="holo-checkbox ${on ? 'is-on' : ''}"><${Icon} n="check" size=16/></div>`;
+}
+
+function RadialProgress({ progress, size = 60, stroke = 6 }) {
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const off = c * (1 - clamp(progress, 0, 1));
+  return html`
+    <svg class="radial-progress" width=${size} height=${size} viewBox="0 0 ${size} ${size}">
+      <circle class="radial-bg" cx=${size/2} cy=${size/2} r=${r} stroke-width=${stroke}/>
+      <circle class="radial-fg" cx=${size/2} cy=${size/2} r=${r} stroke-width=${stroke} stroke-dasharray=${c} stroke-dashoffset=${off}/>
+    </svg>
+  `;
+}
+
+function Modal({ title, icon, onClose, children }) {
+  return html`
+    <div class="scrim" onClick=${e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div class="holo-modal">
+        <div class="modal-grip"></div>
+        <div class="module-header">
+          <div class="holo-icon-group"><div class="holo-icon"><${Icon} n=${icon}/></div><div class="holo-data" style="font-size: 1.1rem; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${title}</div></div>
+          <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px; flex-shrink:0;" onClick=${onClose}><${Icon} n="x" size=16/></button>
+        </div>
+        ${children}
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   Views
+   ============================================================ */
+
+// ----- HOME (Goal Core) -----
+function Home({ go }) {
+  const { state, dispatch } = useApp();
+  const todayTasks = state.tasks.filter(t => t.date === today());
+  const doneTasks = todayTasks.filter(t => t.done);
+  const prog = todayTasks.length ? doneTasks.length / todayTasks.length : 0;
+
+  const [time, setTime] = useState(new Date());
+  useEffect(() => {
+    const timerId = setInterval(() => setTime(new Date()), 1000);
+    return () => clearInterval(timerId);
+  }, []);
+
+  const timeStr = time.toLocaleTimeString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const dateStr = time.toLocaleDateString('ja-JP', { timeZone: 'Asia/Tokyo', year: 'numeric', month: '2-digit', day: '2-digit' }).replace(/\//g, '.');
+
+  return html`
+    <div class="app__inner">
+      <div class="holo-clock-panel">
+        <div class="holo-clock-time">${timeStr}</div>
+        <div class="holo-clock-date">${dateStr}</div>
+      </div>
+
+      <div class="goal-core-wrapper">
+        <div class="goal-core">
+          <div class="core-orbit core-orbit-1"></div>
+          <div class="core-orbit core-orbit-2"></div>
+          <div class="core-sphere">
+            <div class="core-level">${state.level}</div>
+            <div class="core-lvl-label">レベル</div>
+          </div>
+        </div>
+        <div class="core-stats">
+          <div class="core-stat-badge"><${Icon} n="spark" size=14/> ${state.xp} XP</div>
+          <div class="core-stat-badge"><${Icon} n="droplet" size=14/> ${state.streak} 日</div>
+        </div>
+      </div>
+
+      <div class="glass-panel">
+        <div class="module-header">
+          <div class="holo-icon-group">
+            <div class="holo-icon"><${Icon} n="target"/></div>
+            <div><div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${doneTasks.length} / ${todayTasks.length}</div><div class="holo-label">今日のタスク</div></div>
+          </div>
+          <${RadialProgress} progress=${prog} size=46 stroke=4/>
+        </div>
+        <div class="holo-list">
+          ${todayTasks.length ? todayTasks.map(tk => html`
+            <div class="holo-item ${tk.done ? 'is-done' : ''}" key=${tk.id}>
+              <div onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></div>
+              <div class="holo-item__text">${tk.title}</div>
+              <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
+                dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: tk.id, title: tk.title } });
+                go('timer');
+              }}><${Icon} n="timer" size=14/></button>
+            </div>
+          `) : html`<div class="holo-label text-center" style="padding: 20px;">タスクはありません</div>`}
+        </div>
+      </div>
+
+      <div class="grid-2">
+        ${state.goals.slice(0,4).map(g => html`
+          <div class="glass-panel glass-panel--sm" key=${g.id}>
+            <div class="holo-icon mb-4"><${Icon} n="grid"/></div>
+            <div style="font-weight:600; font-size:0.9rem; margin-bottom: 4px; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${g.title}</div>
+            <div class="holo-label">期限: ${g.deadline}</div>
+          </div>
+        `)}
+      </div>
+    </div>
+  `;
+}
+
+// ----- CALENDAR & MONTHLY (Vertical Layout) -----
+function Calendar({ go }) {
+  const { state, dispatch, addToast } = useApp();
+  const [mDate, setMDate] = useState({ y: new Date().getFullYear(), m: new Date().getMonth() });
+  const [subTxt, setSubTxt] = useState('');
+  const [selDate, setSelDate] = useState(today());
+  const [taskTxt, setTaskTxt] = useState('');
+  const [actionNode, setActionNode] = useState(null); 
+  
+  const mp = `${mDate.y}-${pad(mDate.m + 1)}`;
+  const mGoal = state.monthGoals[mp] || { title: '', subtasks: [] };
+  const currentMap = state.maps.find(m => m.id === `map_${mp}`);
+
+  const shift = n => setMDate(c => { let m = c.m + n, y = c.y; if(m<0){m=11;y--;} if(m>11){m=0;y++;} return {y,m}; });
+  const addSub = () => { if(subTxt.trim()) { dispatch({ type: 'ADD_MONTH_SUBTASK', month: mp, title: subTxt.trim() }); setSubTxt(''); } };
+
+  const addTask = () => {
+    if (!taskTxt.trim()) return; 
+    dispatch({ type: 'ADD_TASK', task: { id: uid(), title: taskTxt.trim(), date: selDate, done: false } }); 
+    setTaskTxt(''); addToast('タスクを追加しました', 'success');
+  };
+
+  const dim = new Date(mDate.y, mDate.m + 1, 0).getDate();
+  const firstDay = new Date(mDate.y, mDate.m, 1).getDay();
+  let cells = [];
+  for(let i=0; i<firstDay; i++) cells.push(null);
+  for(let i=1; i<=dim; i++) cells.push(`${mDate.y}-${pad(mDate.m + 1)}-${pad(i)}`);
+  const t = today();
+
+  const selectedTasks = state.tasks.filter(tk => tk.date === selDate);
+
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel flex-between glass-panel--sm">
+        <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => shift(-1)}><${Icon} n="chevL"/></button>
+        <div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${mDate.y} - ${pad(mDate.m + 1)}</div>
+        <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => shift(1)}><${Icon} n="chevR"/></button>
+      </div>
+
+      <div class="glass-panel">
+        <div class="cal-grid">
+          ${['日', '月', '火', '水', '木', '金', '土'].map(d => html`<div class="cal-dow" key=${d}>${d}</div>`)}
+          ${cells.map((ds, i) => {
+            if (!ds) return html`<div key=${'e'+i}></div>`;
+            const tks = state.tasks.filter(x => x.date === ds);
+            return html`
+              <div class="cal-cell ${ds === t ? 'is-today' : ''} ${ds === selDate ? 'is-selected' : ''}" key=${ds} onClick=${() => setSelDate(ds)}>
+                <span class="d">${parseInt(ds.slice(-2), 10)}</span>
+                <div class="cal-dots">${tks.map((tk, j) => html`<div class="cal-dot ${tk.done ? 'done' : ''}" key=${j}></div>`)}</div>
+              </div>
+            `;
+          })}
+        </div>
+      </div>
+
+      <!-- Monthly Panel -->
+      <div class="glass-panel">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon" style="width:32px;height:32px;"><${Icon} n="target" size=16/></div><div class="holo-label">月間目標</div></div></div>
+        <input class="glass-input mb-4" placeholder="目標を設定..." value=${mGoal.title} onInput=${e => dispatch({ type: 'SET_MONTH_GOAL', month: mp, title: e.currentTarget.value })} />
+        <div class="holo-label mb-4">サブタスク (思考回路に同期)</div>
+        <div class="holo-list mb-4">
+          ${mGoal.subtasks.map(st => {
+            let isDone = false;
+            if (currentMap && st.nodeId && currentMap.nodes[st.nodeId]) {
+              isDone = !!currentMap.nodes[st.nodeId].manualDone;
+            } else if (st.taskId) {
+              const tk = state.tasks.find(x => x.id === st.taskId);
+              isDone = tk ? tk.done : false;
+            }
+            return html`
+              <div class="holo-item ${isDone ? 'is-done' : ''}" key=${st.id} style="padding: 10px;">
+                <div onClick=${() => {
+                  if (st.nodeId && currentMap) dispatch({ type: 'TOGGLE_MAP_NODE', mapId: currentMap.id, nodeId: st.nodeId });
+                  else if (st.taskId) dispatch({ type: 'TOGGLE_TASK', id: st.taskId });
+                }}><${Check} on=${isDone}/></div>
+                <div class="holo-item__text" style="font-size:0.85rem;">${st.title}</div>
+                <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
+                  if(st.nodeId && currentMap) {
+                    dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'node', id: st.nodeId, mapId: currentMap.id, title: st.title } });
+                    go('timer');
+                  } else if (st.taskId) {
+                    dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: st.taskId, title: st.title } });
+                    go('timer');
+                  }
+                }}><${Icon} n="timer" size=12/></button>
+                <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; border:none; flex-shrink:0;" onClick=${() => {
+                  if(currentMap) {
+                    const nId = st.nodeId || Object.keys(currentMap.nodes).find(k => currentMap.nodes[k].taskId === st.taskId);
+                    if(nId) setActionNode(nId);
+                  }
+                }}><${Icon} n="settings" size=12/></button>
+              </div>
+            `;
+          })}
+        </div>
+        <div class="flex-row">
+          <input class="glass-input" placeholder="追加..." value=${subTxt} onInput=${e => setSubTxt(e.currentTarget.value)} onKeyDown=${e => { if(e.key==='Enter') addSub(); }}/>
+          <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addSub}><${Icon} n="plus"/></button>
+        </div>
+      </div>
+
+      <!-- Daily Tasks Panel -->
+      <div class="glass-panel">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon" style="width:32px;height:32px;"><${Icon} n="calendar" size=16/></div><div class="holo-label">${selDate} のタスク</div></div></div>
+        <div class="holo-list mb-4">
+          ${selectedTasks.length ? selectedTasks.map(tk => html`
+            <div class="holo-item ${tk.done ? 'is-done' : ''}" key=${tk.id} style="padding: 10px;">
+              <div onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></div>
+              <div class="holo-item__text" style="font-size:0.85rem;">${tk.title}</div>
+              <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
+                dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: tk.id, title: tk.title } });
+                go('timer');
+              }}><${Icon} n="timer" size=12/></button>
+              <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0;" onClick=${() => dispatch({ type: 'DELETE_TASK', id: tk.id })}><${Icon} n="trash" size=12/></button>
+            </div>
+          `) : html`<div class="holo-label text-center" style="padding:10px;">タスクはありません</div>`}
+        </div>
+        <div class="flex-row">
+          <input class="glass-input" placeholder="タスクを追加..." value=${taskTxt} onInput=${e => setTaskTxt(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') addTask(); }}/>
+          <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addTask}><${Icon} n="plus"/></button>
+        </div>
+      </div>
+      
+      ${actionNode && currentMap ? html`<${ActionModal} node=${currentMap.nodes[actionNode]} map=${currentMap} onClose=${() => setActionNode(null)} go=${go}/>` : null}
+    </div>
+  `;
+}
+
+// ----- CIRCUIT MAP -----
+function CircuitMap({ go }) {
+  const { state } = useApp();
+  const [selMap, setSelMap] = useState(state.maps[0]?.id || null);
+  const [actionNode, setActionNode] = useState(null);
+
+  useEffect(() => { if (!selMap && state.maps.length > 0) setSelMap(state.maps[0].id); }, [state.maps, selMap]);
+  const map = state.maps.find(m => m.id === selMap);
+
+  const isNodeDone = useCallback((id) => {
+    if (!map) return false;
+    const node = map.nodes[id];
+    if (!node) return false;
+    if (node.taskId) {
+      const task = state.tasks.find(t => t.id === node.taskId);
+      if (task && task.done) return true;
+    }
+    return !!node.manualDone;
+  }, [map, state.tasks]);
+
+  const pos = useMemo(() => {
+    if(!map) return {};
+    const p = {}; const nodes = map.nodes;
+    
+    const depths = {};
+    function calcDepth(id, d) {
+      depths[id] = d;
+      (nodes[id].children || []).forEach(cid => calcDepth(cid, d + 1));
+    }
+    calcDepth(map.rootId, 0);
+    const maxDepth = Math.max(0, ...Object.values(depths));
+
+    let currentY = 60;
+    const ySpacing = 80;
+    const xSpacing = 160;
+
+    function assignY(id) {
+      const ch = nodes[id]?.children || [];
+      if(!ch.length) { 
+        p[id] = { y: currentY }; currentY += ySpacing; 
+      } else {
+        let sumY = 0;
+        ch.forEach(cid => { assignY(cid); sumY += p[cid].y; });
+        p[id] = { y: sumY / ch.length };
+      }
+    }
+    assignY(map.rootId);
+
+    const rootX = maxDepth * xSpacing + 100;
+    Object.keys(nodes).forEach(id => {
+      const d = depths[id];
+      p[id] = { ...p[id], x: rootX - (d * xSpacing) };
+    });
+
+    return p;
+  }, [map]);
+
+  const paths = [];
+  if (map) {
+    function trace(id) {
+      const node = map.nodes[id];
+      (node.children || []).forEach(cid => {
+        const pParent = pos[id]; const pChild = pos[cid];
+        const midX = (pParent.x + pChild.x) / 2;
+        const d = `M ${pChild.x} ${pChild.y} L ${midX} ${pChild.y} L ${midX} ${pParent.y} L ${pParent.x} ${pParent.y}`;
+        const isActive = isNodeDone(cid); 
+        paths.push(html`<path key=${id+'-'+cid} d=${d} class="circuit-path ${isActive ? 'is-active' : ''}"/>`);
+        trace(cid);
+      });
+    }
+    trace(map.rootId);
+  }
+
+  const w = map ? Math.max(0, ...Object.values(pos).map(p => p.x)) + 120 : 0;
+  const h = map ? Math.max(0, ...Object.values(pos).map(p => p.y)) + 80 : 0;
+
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel glass-panel--sm flex-between">
+        <div class="holo-icon-group"><div class="holo-icon"><${Icon} n="branch"/></div><div class="holo-label">思考回路</div></div>
+        ${state.maps.length > 0 ? html`
+          <select class="glass-select" style="width: auto; padding: 6px 12px;" value=${selMap} onChange=${e => setSelMap(e.currentTarget.value)}>
+            ${state.maps.map(m => html`<option key=${m.id} value=${m.id}>${m.title || m.month}</option>`)}
+          </select>
+        ` : null}
+      </div>
+
+      ${map ? html`
+        <div class="circuit-container">
+          <svg class="circuit-svg" width="${w}" height="${Math.max(420, h)}" viewBox="0 0 ${w} ${Math.max(420, h)}">
+            ${paths}
+          </svg>
+          ${Object.keys(pos).map(id => {
+            const n = map.nodes[id];
+            const isDone = isNodeDone(id);
+            const isRoot = id === map.rootId;
+            return html`
+              <div class="circuit-node" key=${id} style="left: ${pos[id].x}px; top: ${pos[id].y}px;">
+                <button class="node-crystal ${isRoot ? 'is-root' : ''} ${isDone ? 'is-done' : ''}" onClick=${() => setActionNode(id)}>
+                  ${isRoot ? html`<${Icon} n="grid"/>` : html`<${Icon} n="zap"/>`}
+                </button>
+                <div class="node-label">${n.text}</div>
+              </div>
+            `;
+          })}
+        </div>
+        <div class="holo-label text-center mt-2">💡 ライトをタップして点灯・細分化</div>
+      ` : html`<div class="glass-panel text-center"><div class="holo-label">回路がありません。<br/>月間目標から初期化してください。</div></div>`}
+
+      ${actionNode && map ? html`<${ActionModal} node=${map.nodes[actionNode]} map=${map} onClose=${() => setActionNode(null)} go=${go}/>` : null}
+    </div>
+  `;
+}
+
+function ActionModal({ node, map, onClose, go }) {
+  const { state, dispatch, addToast } = useApp();
+  const task = node.taskId ? state.tasks.find(t => t.id === node.taskId) : null;
+  const isDone = task ? task.done : !!node.manualDone;
+  const [subTxt, setSubTxt] = useState('');
+
+  const toggle = () => { 
+    if (task) {
+      dispatch({ type: 'TOGGLE_TASK', id: task.id }); 
+    } else {
+      const nextMap = JSON.parse(JSON.stringify(map));
+      nextMap.nodes[node.id].manualDone = !nextMap.nodes[node.id].manualDone;
+      dispatch({ type: 'UPDATE_MAP', map: nextMap });
+    }
+    onClose(); 
+  };
+  
+  const toTimer = () => { 
+    if(task) dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: task.id, title: node.text } });
+    else dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'node', id: node.id, mapId: map.id, title: node.text } });
+    go('timer'); 
+    onClose(); 
+  };
+
+  const addSub = () => {
+    if(!subTxt.trim()) return;
+    const nodeId = uid();
+    const nextMap = JSON.parse(JSON.stringify(map));
+    nextMap.nodes[nodeId] = { id: nodeId, text: subTxt.trim(), parentId: node.id, children: [], manualDone: false };
+    if (!nextMap.nodes[node.id].children) nextMap.nodes[node.id].children = [];
+    nextMap.nodes[node.id].children.push(nodeId);
+
+    dispatch({ type: 'UPDATE_MAP', map: nextMap });
+    setSubTxt('');
+    addToast('サブタスクを回路に追加しました', 'success');
+  };
+
+  return html`
+    <${Modal} title="ノード操作" icon="zap" onClose=${onClose}>
+      <div class="text-center mb-4" style="font-size:1.2rem; font-weight:600; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${node.text}</div>
+      
+      <div class="holo-label mb-2">アクション</div>
+      <div class="holo-list mb-4">
+        <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${toggle}>
+          <${Icon} n="check"/> ${isDone ? '💡 ライトを消す（未完了）' : '💡 ライトを点灯する（完了）'}
+        </button>
+        <button class="glass-btn glass-btn--block" onClick=${toTimer}>
+          <${Icon} n="timer"/> この目標で集中モードを開始
+        </button>
+      </div>
+
+      <div class="holo-label mb-2">さらに細分化する（孫タスクの追加）</div>
+      <div class="flex-row">
+        <input class="glass-input" placeholder="サブタスクを入力..." value=${subTxt} onInput=${e => setSubTxt(e.currentTarget.value)} onKeyDown=${e => { if(e.key==='Enter') addSub(); }}/>
+        <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addSub}><${Icon} n="plus"/></button>
+      </div>
+    </${Modal}>
+  `;
+}
+
+// ----- TIMER -----
+function Timer() {
+  const { state, dispatch, addToast } = useApp();
+  const [dur, setDur] = useState(state.timer.lastDurationMin || 25);
+  const [timeLeft, setTimeLeft] = useState(dur * 60);
+  const [running, setRunning] = useState(false);
+  const [zen, setZen] = useState(false);
+  const [bgm, setBgm] = useState(null);
+  const reqRef = useRef(0);
+  const endRef = useRef(0);
+  const fillRef = useRef(null);
+  const timeTxtRef = useRef(null);
+  const lastSecRef = useRef(-1);
+  
+  const aTarget = state.activeTimerTarget;
+
+  const handleTargetChange = (e) => {
+    const val = e.currentTarget.value;
+    if (val === 'free') {
+      dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: null });
+    } else if (val.startsWith('task_')) {
+      const taskId = val.replace('task_', '');
+      const t = state.tasks.find(x => x.id === taskId);
+      if (t) dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: t.id, title: t.title } });
+    }
+  };
+
+  let isTargetDone = false;
+  let targetTitle = '';
+  if (aTarget) {
+     targetTitle = aTarget.title;
+     if (aTarget.type === 'task') {
+       const t = state.tasks.find(x => x.id === aTarget.id);
+       if (t) isTargetDone = t.done;
+     } else if (aTarget.type === 'node') {
+       const m = state.maps.find(x => x.id === aTarget.mapId);
+       if (m && m.nodes[aTarget.id]) isTargetDone = m.nodes[aTarget.id].manualDone;
+     }
+  }
+
+  useEffect(() => { AudioEngine.setVolume(state.settings.soundVolume); }, [state.settings.soundVolume]);
+
+  useEffect(() => {
+    if (AudioEngine.isPlaying()) {
+       const el = document.getElementById('bgm-player');
+       if (el && el.dataset.currentId) setBgm(el.dataset.currentId);
+    }
+  }, []);
+
+  const finish = useCallback(() => {
+    setRunning(false); setTimeLeft(0); AudioEngine.chime();
+    dispatch({ type: 'LOG_SESSION', durationMin: dur });
+    addToast('セッション完了', 'success');
+    if(aTarget && !isTargetDone && confirm(`[${targetTitle}] を完了にしますか？`)) {
+      if (aTarget.type === 'task') dispatch({ type: 'TOGGLE_TASK', id: aTarget.id });
+      if (aTarget.type === 'node') dispatch({ type: 'TOGGLE_MAP_NODE', mapId: aTarget.mapId, nodeId: aTarget.id });
+    }
+  }, [dur, aTarget, isTargetDone, targetTitle, dispatch, addToast]);
+
+  useEffect(() => {
+    if (!running) {
+      cancelAnimationFrame(reqRef.current);
+      return;
+    }
+    
+    const targetTime = Date.now() + timeLeft * 1000;
+    const totalSecs = dur * 60;
+
+    const tick = () => {
+      const now = Date.now();
+      const left = (targetTime - now) / 1000;
+      
+      if (left <= 0) { 
+        finish(); 
+      } else { 
+        const prog = clamp((totalSecs - left) / totalSecs, 0, 1);
+        if (fillRef.current) {
+          const displayProg = 0.05 + (prog * 0.95);
+          const baseY = (1 - displayProg) * 100;
+          // 後半(35%経過後)からだんだん水面が揺れて軽く波立つ
+          const intensity = clamp((prog - 0.35) / 0.65, 0, 1);
+          const bob = (Math.sin(now / 360) * 1.6 + Math.sin(now / 170) * 0.5) * intensity;
+          fillRef.current.style.transform = `translateY(${baseY + bob}%)`;
+        }
+        if (timeTxtRef.current) {
+          timeTxtRef.current.innerText = fmtClock(left);
+        }
+        // 水位を極限まで滑らかに：水位と残り時間はDOMを直接更新しているので、
+        // 重いReact再描画は表示秒が変わった時(=1秒に1回)だけに絞る。
+        // これで毎フレームの再描画によるフレーム落ち(カクつき)が無くなり、RAFだけで滑らかに動く。
+        const wholeLeft = Math.ceil(left);
+        if (wholeLeft !== lastSecRef.current) {
+          lastSecRef.current = wholeLeft;
+          setTimeLeft(left);
+        }
+        reqRef.current = requestAnimationFrame(tick); 
+      }
+    };
+    reqRef.current = requestAnimationFrame(tick);
+    
+    return () => {
+      cancelAnimationFrame(reqRef.current);
+      setTimeLeft(Math.max(0, (targetTime - Date.now()) / 1000));
+    };
+  }, [running, dur, finish]);
+
+  const toggleZen = () => {
+    if (!zen) {
+      setZen(true);
+      try { document.documentElement.requestFullscreen(); } catch(e){}
+    } else {
+      setZen(false);
+      try { document.exitFullscreen(); } catch(e){}
+    }
+  };
+
+  const progress = dur * 60 > 0 ? clamp(1 - (timeLeft / (dur * 60)), 0, 1) : 0;
+  const initialProg = 0.05 + (progress * 0.95);
+
+  // 停止中(一時停止/初期/スライダー操作)は描画前に水位をセットしてチラつきを防ぐ。
+  // 実行中はRAFが毎フレーム水位を制御するので、ここは何もしない＝Reactが上書きせず完全に滑らか。
+  useLayoutEffect(() => {
+    if (!running && fillRef.current) {
+      fillRef.current.style.transform = `translateY(${(1 - initialProg) * 100}%)`;
+    }
+  }, [running, initialProg]);
+
+  if (zen) {
+    return html`
+      <div class="zen">
+        <div class="water-fill" ref=${fillRef}>
+          <svg class="wave wave--a" viewBox="0 0 120 24" preserveAspectRatio="none"><path d="M0 12 C 20 2 40 2 60 12 S 100 22 120 12 V24 H0 Z"/></svg>
+          <svg class="wave wave--b" viewBox="0 0 120 24" preserveAspectRatio="none"><path d="M0 12 C 20 2 40 2 60 12 S 100 22 120 12 V24 H0 Z"/></svg>
+          <span class="bubble" style="left:22%; width:7px; height:7px; animation-duration:5.5s; animation-delay:0s;"></span>
+          <span class="bubble" style="left:42%; width:4px; height:4px; animation-duration:4.2s; animation-delay:1.4s;"></span>
+          <span class="bubble" style="left:60%; width:9px; height:9px; animation-duration:6.8s; animation-delay:0.7s;"></span>
+          <span class="bubble" style="left:74%; width:5px; height:5px; animation-duration:5s; animation-delay:2.3s;"></span>
+          <span class="bubble" style="left:33%; width:5px; height:5px; animation-duration:6s; animation-delay:3.1s;"></span>
+        </div>
+        <button class="glass-btn glass-btn--icon zen__close" onClick=${toggleZen}><${Icon} n="compress"/></button>
+        <div class="zen__center">
+          ${aTarget ? html`<div style="color:var(--holo-cyan); font-size:1.2rem; font-weight:600; text-shadow:0 0 10px rgba(0,0,0,0.5); margin-bottom: 20px;">${targetTitle}</div>` : null}
+          <div class="timer-display-box">
+            <div class="timer-time" ref=${timeTxtRef}>${fmtClock(timeLeft)}</div>
+          </div>
+          <div class="flex-row mt-4">
+            <button class="holo-btn-start" onClick=${() => setRunning(!running)}>
+              <${Icon} n=${running ? 'pause' : 'play'} size=32/>
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel glass-panel--sm mb-4" style="padding: 12px; border-color: var(--holo-cyan); box-shadow: var(--glow-cyan);">
+        <div class="flex-between">
+          <div class="holo-label" style="margin:0; color: var(--text-cyan);">TARGET</div>
+          <select class="glass-select" style="width: 70%; padding: 6px 12px; font-size: 0.9rem; background: rgba(0,0,0,0.4);" value=${aTarget && aTarget.type === 'task' ? `task_${aTarget.id}` : 'free'} onChange=${handleTargetChange} disabled=${running}>
+            <option value="free">Free Focus</option>
+            ${state.tasks.filter(t => !t.done).map(t => html`<option key=${t.id} value="task_${t.id}">${t.title}</option>`)}
+          </select>
+        </div>
+      </div>
+
+      <div class="water-wrap mt-4 mb-4">
+        <div class="water-fill" ref=${fillRef}>
+          <svg class="wave wave--a" viewBox="0 0 120 24" preserveAspectRatio="none"><path d="M0 12 C 20 2 40 2 60 12 S 100 22 120 12 V24 H0 Z"/></svg>
+          <svg class="wave wave--b" viewBox="0 0 120 24" preserveAspectRatio="none"><path d="M0 12 C 20 2 40 2 60 12 S 100 22 120 12 V24 H0 Z"/></svg>
+          <span class="bubble" style="left:22%; width:7px; height:7px; animation-duration:5.5s; animation-delay:0s;"></span>
+          <span class="bubble" style="left:42%; width:4px; height:4px; animation-duration:4.2s; animation-delay:1.4s;"></span>
+          <span class="bubble" style="left:60%; width:9px; height:9px; animation-duration:6.8s; animation-delay:0.7s;"></span>
+          <span class="bubble" style="left:74%; width:5px; height:5px; animation-duration:5s; animation-delay:2.3s;"></span>
+          <span class="bubble" style="left:33%; width:5px; height:5px; animation-duration:6s; animation-delay:3.1s;"></span>
+        </div>
+        <div class="timer-face">
+          <div class="timer-display-box">
+            <div class="timer-time" ref=${timeTxtRef}>${fmtClock(timeLeft)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flex-row" style="justify-content: center; gap: 24px; margin-bottom: 30px;">
+        <button class="glass-btn glass-btn--icon" onClick=${() => { setRunning(false); setTimeLeft(dur * 60); }}><${Icon} n="x"/></button>
+        <button class="holo-btn-start" onClick=${() => setRunning(!running)}>
+          <${Icon} n=${running ? 'pause' : 'play'} size=32/>
+        </button>
+        <button class="glass-btn glass-btn--icon" onClick=${toggleZen}><${Icon} n="expand"/></button>
+      </div>
+      
+      <div class="glass-panel mb-4">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="clock"/></div><div class="holo-label">時間設定</div></div></div>
+        <input type="range" min="1" max="120" step="1" value=${dur} disabled=${running} style="width:100%; accent-color: var(--holo-cyan); margin-bottom: 12px;" 
+          onInput=${e => { const val = parseInt(e.target.value, 10); setDur(val); if(!running) setTimeLeft(val * 60); }} />
+        <div class="flex-between">
+          <span class="holo-label">自由入力(分)</span>
+          <input class="glass-input" type="number" min="1" max="600" value=${dur} disabled=${running} style="width:100px; text-align:center; padding: 8px;"
+            onInput=${e => { const val = clamp(parseInt(e.target.value || '1', 10), 1, 600); setDur(val); if(!running) setTimeLeft(val * 60); }} />
+        </div>
+      </div>
+
+      <div class="glass-panel">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="music"/></div><div class="holo-label">環境音設定</div></div></div>
+        <div class="audio-grid">
+          ${BGM_FILES.map(f => html`
+            <div class="audio-card ${bgm === f.id ? 'is-active' : ''}" key=${f.id} onClick=${() => { const isP = AudioEngine.toggle(f.id); setBgm(isP ? f.id : null); }}>
+              <${Icon} n=${f.ico} size=24/>
+              <span class="holo-label">${f.nm}</span>
+            </div>
+          `)}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ----- CARDS (Flashcards Memory Engine) -----
+function Cards() {
+  const { state, dispatch, addToast } = useApp();
+  
+  const [front, setFront] = useState(''); 
+  const [back, setBack] = useState('');
+  const [category, setCategory] = useState('');
+  const [tags, setTags] = useState('');
+  
+  const [queue, setQueue] = useState([]); 
+  const [idx, setIdx] = useState(0); 
+  const [flip, setFlip] = useState(false);
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterCategory, setFilterCategory] = useState('All');
+  
+  const [editCard, setEditCard] = useState(null);
+
+  const dueCards = state.cards.filter(c => c.due <= today());
+
+  const categories = useMemo(() => {
+    return Array.from(new Set(state.cards.map(c => c.category || '一般')));
+  }, [state.cards]);
+
+  const filteredCards = useMemo(() => {
+    return state.cards.filter(c => {
+      const matchCat = filterCategory === 'All' || (c.category || '一般') === filterCategory;
+      const q = searchQuery.toLowerCase();
+      const matchSearch = q === '' || c.front.toLowerCase().includes(q) || c.back.toLowerCase().includes(q) || (c.tags || []).join(' ').toLowerCase().includes(q);
+      return matchCat && matchSearch;
+    });
+  }, [state.cards, filterCategory, searchQuery]);
+
+  const start = () => {
+    if(!dueCards.length) return addToast('学習するフラッシュカードがありません', 'info');
+    setQueue(dueCards.map(c => c.id).sort(() => Math.random() - 0.5));
+    setIdx(0); setFlip(false);
+  };
+
+  const grade = (g) => {
+    dispatch({ type: 'REVIEW_CARD', id: queue[idx], grade: g });
+    setFlip(false);
+
+    let nextQueue = [...queue];
+    let nextIdx = idx + 1;
+
+    // 「もう一度」または「難しい」の場合は、学習キューの最後に再度追加して覚えるまで繰り返す
+    if (g < 4) {
+      nextQueue.push(queue[idx]);
+    }
+
+    if (nextIdx < nextQueue.length) {
+      setQueue(nextQueue);
+      setIdx(nextIdx);
+    } else {
+      setQueue([]); 
+      addToast('学習セッション完了！', 'success');
+    }
+  };
+
+  const add = () => {
+    if(!front.trim() || !back.trim()) return;
+    dispatch({ 
+      type: 'ADD_CARD', 
+      card: { 
+        id: uid(), front: front.trim(), back: back.trim(), 
+        category: category.trim() || '一般', 
+        tags: tags.split(',').map(t=>t.trim()).filter(Boolean),
+        ease: 2.5, interval: 0, reps: 0, due: today() 
+      } 
+    });
+    setFront(''); setBack(''); setTags('');
+    addToast('フラッシュカードを保存しました', 'success');
+  };
+
+  const saveEdit = () => {
+    if(!editCard.front.trim() || !editCard.back.trim()) return;
+    dispatch({ type: 'UPDATE_CARD', card: editCard });
+    setEditCard(null);
+    addToast('フラッシュカードを更新しました', 'success');
+  };
+
+  if (queue.length > 0) {
+    const card = state.cards.find(c => c.id === queue[idx]);
+    return html`
+      <div class="app__inner">
+        <div class="flex-between">
+          <div class="holo-label">残り: ${queue.length - idx} / ${queue.length}</div>
+          <button class="glass-btn glass-btn--sm" onClick=${() => setQueue([])}>中断</button>
+        </div>
+        <div class="flash-stage">
+          <div class="flash-card ${flip ? 'is-flip' : ''}" onClick=${() => !flip && setFlip(true)}>
+            <div class="flash-face"><div class="flash-q">${card.front}</div></div>
+            <div class="flash-face is-back"><div class="flash-a">${card.back}</div></div>
+          </div>
+          ${!flip ? html`
+            <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${() => setFlip(true)}>
+              解答を見る
+            </button>
+          ` : html`
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; width: 100%; margin-top: 16px;">
+              <button class="glass-btn glass-btn--danger" style="padding: 10px 4px; font-size: 0.85rem;" onClick=${(e) => { e.stopPropagation(); grade(2); }}>もう一度</button>
+              <button class="glass-btn" style="padding: 10px 4px; font-size: 0.85rem;" onClick=${(e) => { e.stopPropagation(); grade(3); }}>難しい</button>
+              <button class="glass-btn glass-btn--primary" style="padding: 10px 4px; font-size: 0.85rem;" onClick=${(e) => { e.stopPropagation(); grade(4); }}>普通 (覚えた)</button>
+              <button class="glass-btn" style="padding: 10px 4px; font-size: 0.85rem; border-color: var(--success); color: var(--success);" onClick=${(e) => { e.stopPropagation(); grade(5); }}>簡単</button>
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+  }
+
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel flex-between">
+        <div>
+          <div class="holo-data" style="font-size:2rem; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${dueCards.length}</div>
+          <div class="holo-label">今日の学習カード</div>
+        </div>
+        <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${start}><${Icon} n="play"/></button>
+      </div>
+
+      <div class="glass-panel">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="plus"/></div><div class="holo-label">フラッシュカード作成</div></div></div>
+        
+        <div class="holo-label mb-2">カテゴリ</div>
+        <input class="glass-input mb-4" placeholder="例: 英語、プログラミング..." value=${category} onInput=${e => setCategory(e.currentTarget.value)}/>
+        
+        <div class="holo-label mb-2">タグ（カンマ区切り）</div>
+        <input class="glass-input mb-4" placeholder="例: 重要, TOEIC" value=${tags} onInput=${e => setTags(e.currentTarget.value)}/>
+
+        <div class="holo-label mb-2">問題 (Question)</div>
+        <input class="glass-input mb-4" placeholder="問題を入力..." value=${front} onInput=${e => setFront(e.currentTarget.value)}/>
+        
+        <div class="holo-label mb-2">解答 (Answer)</div>
+        <textarea class="glass-textarea mb-4" placeholder="解答を入力..." value=${back} onInput=${e => setBack(e.currentTarget.value)}></textarea>
+        
+        <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${add}>保存して追加</button>
+      </div>
+
+      <div class="glass-panel mt-4">
+        <div class="module-header">
+          <div class="holo-icon-group">
+            <div class="holo-icon"><${Icon} n="search"/></div>
+            <div class="holo-label">カード検索・管理 (${filteredCards.length})</div>
+          </div>
+        </div>
+
+        <div class="grid-2 mb-4">
+          <input class="glass-input" placeholder="検索..." value=${searchQuery} onInput=${e => setSearchQuery(e.currentTarget.value)} />
+          <select class="glass-select" value=${filterCategory} onChange=${e => setFilterCategory(e.currentTarget.value)}>
+            <option value="All">すべてのカテゴリ</option>
+            ${categories.map(c => html`<option value=${c}>${c}</option>`)}
+          </select>
+        </div>
+
+        <div class="holo-list" style="max-height: 400px; overflow-y: auto;">
+          ${filteredCards.length ? filteredCards.map(c => html`
+            <div class="holo-item" key=${c.id} style="align-items: flex-start;">
+              <div class="holo-item__text">
+                <div style="font-size: 0.75rem; color: var(--holo-cyan); margin-bottom: 6px; font-weight: 700;">
+                  ${c.category || '一般'} ${c.tags && c.tags.length ? `· ${c.tags.join(', ')}` : ''}
+                </div>
+                <div style="font-weight:600; margin-bottom: 6px;">Q: ${c.front}</div>
+                <div style="font-size: 0.85rem; color: var(--text-muted);">A: ${c.back} <br/><span style="font-size: 0.7rem; opacity: 0.8;">(次回学習: ${c.due})</span></div>
+              </div>
+              <div style="display:flex; flex-direction:column; gap:8px;">
+                <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; min-width:32px; border:none; flex-shrink:0;" onClick=${() => setEditCard(c)}><${Icon} n="edit" size=14/></button>
+                <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; min-width:32px; border:none; flex-shrink:0;" onClick=${() => dispatch({ type: 'DELETE_CARD', id: c.id })}><${Icon} n="trash" size=14/></button>
+              </div>
+            </div>
+          `) : html`<div class="holo-label text-center" style="padding: 20px;">カードが見つかりません</div>`}
+        </div>
+      </div>
+
+      ${editCard ? html`
+        <${Modal} title="フラッシュカード編集" icon="edit" onClose=${() => setEditCard(null)}>
+          <div class="holo-label mb-2">カテゴリ</div>
+          <input class="glass-input mb-4" value=${editCard.category} onInput=${e => setEditCard({...editCard, category: e.currentTarget.value})} />
+          
+          <div class="holo-label mb-2">タグ (カンマ区切り)</div>
+          <input class="glass-input mb-4" value=${(editCard.tags||[]).join(', ')} onInput=${e => setEditCard({...editCard, tags: e.currentTarget.value.split(',').map(t=>t.trim())})} />
+          
+          <div class="holo-label mb-2">問題</div>
+          <input class="glass-input mb-4" value=${editCard.front} onInput=${e => setEditCard({...editCard, front: e.currentTarget.value})} />
+          
+          <div class="holo-label mb-2">解答</div>
+          <textarea class="glass-textarea mb-4" onInput=${e => setEditCard({...editCard, back: e.currentTarget.value})}>${editCard.back}</textarea>
+          
+          <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${saveEdit}>保存</button>
+        </${Modal}>
+      ` : null}
+    </div>
+  `;
+}
+
+// ----- GOALS (Strategic Planning) -----
+function Goals() {
+  const { state, dispatch } = useApp();
+  const [modalOpen, setModalOpen] = useState(false);
+  const [f, setF] = useState({ id: '', title: '', deadline: '' });
+
+  const save = () => {
+    if(!f.title.trim()) return;
+    dispatch({ type: f.id ? 'UPDATE_GOAL' : 'ADD_GOAL', goal: { ...f, id: f.id || uid() } });
+    setModalOpen(false);
+  };
+
+  const openNew = () => { setF({ id: '', title: '', deadline: addDays(today(), 30) }); setModalOpen(true); };
+  const openEdit = (g) => { setF(g); setModalOpen(true); };
+
+  return html`
+    <div class="app__inner">
+      <button class="glass-btn glass-btn--primary glass-btn--block mb-4" onClick=${openNew}>
+        <${Icon} n="plus"/> 新規目標を設定
+      </button>
+
+      <div class="holo-list">
+        ${state.goals.map(g => html`
+          <div class="glass-panel" style="padding:20px;" key=${g.id}>
+            <div class="flex-between mb-4">
+              <div class="holo-data" style="font-size: 1.1rem; line-height: 1.3; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${g.title}</div>
+              <div class="flex-row">
+                <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => openEdit(g)}><${Icon} n="settings" size=16/></button>
+                <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => { if(confirm('目標を削除しますか？')) dispatch({ type: 'DELETE_GOAL', id: g.id }); }}><${Icon} n="trash" size=16/></button>
+              </div>
+            </div>
+            <div class="flex-between">
+              <div class="holo-label">期限: ${g.deadline}</div>
+              ${g.metric ? html`<div class="holo-label">${g.metric.done} / ${g.metric.target}</div>` : null}
+            </div>
+            ${g.metric ? html`<div class="line-bar-wrap mt-4"><div class="line-bar-fill" style="width: ${(g.metric.done / g.metric.target) * 100}%"></div></div>` : null}
+          </div>
+        `)}
+      </div>
+
+      ${modalOpen ? html`
+        <${Modal} title="目標設定" icon="target" onClose=${() => setModalOpen(false)}>
+          <div class="holo-label mb-4">目標名</div>
+          <input class="glass-input mb-4" value=${f.title} onInput=${e => setF({...f, title: e.currentTarget.value})}/>
+          <div class="holo-label mb-4">期限</div>
+          <input class="glass-input mb-4" type="date" value=${f.deadline} onInput=${e => setF({...f, deadline: e.currentTarget.value})}/>
+          <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${save}>保存</button>
+        </${Modal}>
+      ` : null}
+    </div>
+  `;
+}
+
+// ----- INSIGHT (Analytics) -----
+function Insight() {
+  const { state } = useApp();
+  const dnames = ['日', '月', '火', '水', '木', '金', '土'];
+  const wThis = state.timer.sessions.reduce((a, s) => a + s.min, 0);
+  
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="insight"/></div><div class="holo-label">システム解析</div></div></div>
+        <div class="holo-data text-center mb-4" style="font-size:2rem; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">${wThis} 分</div>
+        <div class="holo-label text-center mb-4">累計集中時間</div>
+        
+        <div class="flex-row" style="align-items:flex-end; height: 80px; gap: 8px;">
+           ${dnames.map((d, i) => html`
+             <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:8px;">
+               <div style="width:100%; background: linear-gradient(180deg, var(--holo-cyan), rgba(77,154,236,0.2)); border-radius: 4px; height: ${Math.max(10, Math.random()*80 + 20)}%;"></div>
+               <div class="holo-label">${d}</div>
+             </div>
+           `)}
+        </div>
+      </div>
+      
+      <div class="grid-2">
+        <div class="glass-panel text-center">
+          <div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${state.xp}</div><div class="holo-label mt-4">累計XP</div>
+        </div>
+        <div class="glass-panel text-center">
+          <div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${state.streak}</div><div class="holo-label mt-4">連続達成日数</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ----- SETTINGS -----
+function Settings() {
+  const { state, dispatch, addToast } = useApp();
+  const fileRef = useRef(null);
+
+  const exportData = () => {
+    const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `goalflow-backup-${today()}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 2000);
+    addToast('書き出し完了', 'success');
+  };
+
+  const importData = (e) => {
+    const fl = e.target.files[0]; if (!fl) return;
+    const r = new FileReader(); r.onload = () => { try { dispatch({ type: 'IMPORT', state: JSON.parse(r.result) }); addToast('読み込み完了', 'success'); } catch (err) {} }; r.readAsText(fl); e.target.value = '';
+  };
+
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel">
+        <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="settings"/></div><div class="holo-label">システム設定</div></div></div>
+        
+        <div class="flex-between mb-4 mt-4">
+          <div class="holo-label">音量</div>
+          <div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${Math.round(state.settings.soundVolume * 100)}%</div>
+        </div>
+        <input type="range" min="0" max="1" step="0.01" value=${state.settings.soundVolume} onInput=${e => { const v = parseFloat(e.currentTarget.value); AudioEngine.setVolume(v); dispatch({type:'SET_SETTINGS', patch:{soundVolume: v}}); }} style="width:100%; accent-color: var(--holo-cyan); margin-bottom: 24px;"/>
+        
+        <div class="holo-label mb-4">データ管理</div>
+        <div class="grid-2">
+           <button class="glass-btn glass-btn--block" onClick=${exportData}>書き出し</button>
+           <button class="glass-btn glass-btn--block" onClick=${() => fileRef.current && fileRef.current.click()}>読み込み</button>
+           <input ref=${fileRef} type="file" accept=".json" style="display:none" onChange=${importData}/>
+        </div>
+
+        <div class="holo-label mb-4" style="margin-top: 24px;">アプリ情報</div>
+        <div class="flex-between" style="padding: 6px 0;">
+          <span class="holo-label">バージョン</span>
+          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.0.6</span>
+        </div>
+        <div class="flex-between" style="padding: 6px 0;">
+          <span class="holo-label">開発者</span>
+          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">たいやき</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+/* ============================================================
+   App Core
+   ============================================================ */
+const VIEWS = { home: Home, calendar: Calendar, maps: CircuitMap, timer: Timer, cards: Cards, goals: Goals, insight: Insight, settings: Settings };
+const TABS = [
+  { id: 'home', icon: 'core' },
+  { id: 'calendar', icon: 'calendar' },
+  { id: 'maps', icon: 'branch' },
+  { id: 'goals', icon: 'target' },
+  { id: 'timer', icon: 'timer' },
+  { id: 'cards', icon: 'layers' },
+  { id: 'insight', icon: 'insight' },
+  { id: 'settings', icon: 'settings' }
+];
+
+function App() {
+  const [state, dispatch] = useReducer(reducer, undefined, () => {
+    try { const r = localStorage.getItem(STORE_KEY); return r ? JSON.parse(r) : seed(); } catch(e){ return seed(); }
+  });
+  const [tab, setTab] = useState('home');
+  const [toasts, setToasts] = useState([]);
+  
+  const addToast = useCallback((text, kind = 'info') => {
+    const id = uid();
+    setToasts(ts => [...ts.slice(-2), { id, text, kind }]);
+    setTimeout(() => setToasts(ts => ts.filter(x => x.id !== id)), 3000);
+  }, []);
+
+  useEffect(() => {
+    const s = setTimeout(() => { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }, 500);
+    return () => clearTimeout(s);
+  }, [state]);
+
+  useEffect(() => { document.documentElement.setAttribute('data-theme', state.settings.theme); }, [state.settings.theme]);
+
+  const toggleTheme = () => {
+    const next = state.settings.theme === 'dark' ? 'light' : 'dark';
+    dispatch({ type: 'SET_SETTINGS', patch: { theme: next } });
+  };
+
+  const View = VIEWS[tab] || Home;
+
+  return html`
+    <${Ctx.Provider} value=${{ state, dispatch, addToast }}>
+      
+      <!-- Theme Toggle (Top Right) -->
+      <button class="theme-toggle" onClick=${toggleTheme}>
+        <${Icon} n=${state.settings.theme === 'dark' ? 'sun' : 'moon'}/>
+      </button>
+
+      <main class="app__main">
+        <${View} go=${setTab}/>
+      </main>
+
+      <nav class="nav">
+        ${TABS.map(t => html`
+          <div class="nav__item ${tab === t.id ? 'is-active' : ''}" key=${t.id} onClick=${() => { setTab(t.id); document.querySelector('.app__main').scrollTo(0,0); }}>
+            <${Icon} n=${t.icon}/>
+          </div>
+        `)}
+      </nav>
+
+      <div class="toasts">
+        ${toasts.map(t => html`<div class="holo-toast" key=${t.id}><${Icon} n="zap"/> ${t.text}</div>`)}
+      </div>
+    </${Ctx.Provider}>
+  `;
+}
+
+render(html`<${App}/>`, document.getElementById('app'));
+</script>
+
+<!-- PWA: register service worker for offline caching & home-screen install -->
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function () {
+    navigator.serviceWorker.register('sw.js', { scope: './' })
+      .then(function (reg) { console.log('GoalFlow SW registered:', reg.scope); })
+      .catch(function (err) { console.warn('GoalFlow SW registration failed:', err); });
+  });
+}
+</script>
+</body>
+</html>
+
+
