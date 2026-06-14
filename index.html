@@ -487,6 +487,11 @@ body {
 .coach-chip { padding: 8px 14px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; background: rgba(120,180,255,0.1); border: 1px solid var(--glass-border); color: var(--text-main); cursor: pointer; transition: all 0.2s var(--ease); }
 [data-theme="light"] .coach-chip { background: rgba(255,255,255,0.7); }
 .coach-chip:active { transform: scale(0.96); }
+.typing-dots { display: inline-flex; gap: 4px; align-items: center; padding: 2px 0; }
+.typing-dots span { width: 6px; height: 6px; border-radius: 50%; background: var(--holo-cyan); opacity: 0.4; animation: typingBlink 1.2s infinite ease-in-out; }
+.typing-dots span:nth-child(2) { animation-delay: 0.2s; }
+.typing-dots span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes typingBlink { 0%, 60%, 100% { opacity: 0.3; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-3px); } }
 </style>
 <script type="importmap">
 {
@@ -697,6 +702,70 @@ const ClaudeAPI = (() => {
     return res.json();
   }
 
+  // SSE ストリーミング呼び出し。content_block_delta の text_delta を順次 onDelta に渡し、
+  // 最終的な全文を返す。SDK 不使用のため fetch の ReadableStream を自前でパースする。
+  async function callStream(body, onDelta) {
+    const key = ApiKeyStore.get();
+    if (!key) { const e = new Error('APIキーが未設定です'); e.code = 'NO_KEY'; throw e; }
+    let res;
+    try {
+      res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({ model: MODEL, stream: true, ...body })
+      });
+    } catch (netErr) {
+      const e = new Error('通信に失敗しました（オフラインの可能性）'); e.code = 'NETWORK'; throw e;
+    }
+    if (!res.ok) {
+      let msg = `エラー (HTTP ${res.status})`;
+      try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
+      if (res.status === 401) msg = 'APIキーが無効です。設定を確認してください。';
+      const e = new Error(msg); e.code = 'HTTP'; e.status = res.status; throw e;
+    }
+    if (!res.body || !res.body.getReader) {
+      // ストリーム非対応環境向けフォールバック（テキストを丸ごと読む）。
+      const txt = await res.text();
+      let full = '';
+      txt.split('\n').forEach(line => {
+        line = line.trim();
+        if (!line.startsWith('data:')) return;
+        try { const ev = JSON.parse(line.slice(5).trim()); if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; if (onDelta) onDelta(full); } } catch (e) {}
+      });
+      return full;
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '', full = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buffer.indexOf('\n')) >= 0) {
+        const line = buffer.slice(0, idx).trim();
+        buffer = buffer.slice(idx + 1);
+        if (!line.startsWith('data:')) continue;
+        const payload = line.slice(5).trim();
+        if (!payload || payload === '[DONE]') continue;
+        let ev;
+        try { ev = JSON.parse(payload); } catch (e) { continue; }
+        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') {
+          full += ev.delta.text;
+          if (onDelta) onDelta(full);
+        } else if (ev.type === 'error') {
+          const e = new Error((ev.error && ev.error.message) || 'ストリーミングエラー'); e.code = 'STREAM'; throw e;
+        }
+      }
+    }
+    return full;
+  }
+
   function textOf(data) {
     const b = (data && data.content || []).find(x => x.type === 'text');
     return b ? b.text : '';
@@ -765,6 +834,15 @@ const ClaudeAPI = (() => {
         messages: history
       });
       return textOf(data);
+    },
+
+    // ストリーミング版。onDelta(全文) が逐次呼ばれ、完了時に全文を返す。
+    async chatStream(history, context, onDelta) {
+      return callStream({
+        max_tokens: 1024,
+        system: CHAT_SYS + '\n\n# ユーザーの現在の状況（参考）\n' + context,
+        messages: history
+      }, onDelta);
     }
   };
 })();
@@ -2162,13 +2240,18 @@ function Coach({ go }) {
   const send = async (text) => {
     const content = (text != null ? text : input).trim();
     if (!content || chatLoading) return;
-    const nextChat = [...chat, { role: 'user', content }];
-    setChat(nextChat); setInput(''); setChatLoading(true);
+    const base = [...chat, { role: 'user', content }];
+    setInput(''); setChatLoading(true);
+    // 空のアシスタント吹き出しを置き、ストリームで埋めていく。
+    setChat([...base, { role: 'assistant', content: '' }]);
+    let acc = '';
     try {
-      const reply = await ClaudeAPI.chat(nextChat, buildCoachContext(state));
-      setChat([...nextChat, { role: 'assistant', content: reply || '（応答が空でした）' }]);
+      acc = await ClaudeAPI.chatStream(base, buildCoachContext(state), (full) => {
+        setChat([...base, { role: 'assistant', content: full }]);
+      });
+      if (!acc) setChat([...base, { role: 'assistant', content: '（応答が空でした）' }]);
     } catch (e) {
-      setChat([...nextChat, { role: 'assistant', content: '⚠️ ' + (e.code === 'NO_KEY' ? 'APIキーが未設定です。設定画面で登録してください。' : (e.message || 'エラーが発生しました')) }]);
+      setChat([...base, { role: 'assistant', content: '⚠️ ' + (e.code === 'NO_KEY' ? 'APIキーが未設定です。設定画面で登録してください。' : (e.message || 'エラーが発生しました')) }]);
       if (e.code === 'NO_KEY') setHasKey(false);
     } finally { setChatLoading(false); }
   };
@@ -2254,8 +2337,7 @@ function Coach({ go }) {
               <div class="holo-label text-center" style="padding:16px; text-transform:none; letter-spacing:normal; line-height:1.7;">
                 行動科学にもとづくコーチに相談できます。<br/>下のボタンか、自由に入力してください。
               </div>
-            ` : chat.map((m, i) => html`<div class="chat-msg ${m.role}" key=${i}>${m.content}</div>`)}
-            ${chatLoading ? html`<div class="chat-msg assistant">…考えています</div>` : null}
+            ` : chat.map((m, i) => html`<div class="chat-msg ${m.role}" key=${i}>${m.content ? m.content : (chatLoading && i === chat.length - 1 ? html`<span class="typing-dots"><span></span><span></span><span></span></span>` : '')}</div>`)}
           </div>
 
           <div class="coach-chips mb-4">

@@ -150,8 +150,13 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
 - Settings に APIキー管理（password入力・表示切替・削除、エクスポートに含めない）。
 - `tests/coach.test.mjs`（9件、`buildCoachContext` の要約/プライバシー）。
 
+### ✅ AIコーチの磨き込み
+- 対話を **SSEストリーミング**化（`ClaudeAPI.callStream`/`chatStream`、`fetch` の ReadableStream を
+  自前パース）。吹き出しが逐次埋まり、待機中はタイピングインジケータ表示。
+  `tests/coach_stream.test.mjs`（7件、チャンク境界/不正JSON/エラーイベント）。
+  ※ 目標分解は構造化出力のため非ストリーミングのまま（全文JSONが必要）。
+
 ### 残課題（次の候補）
-- AIコーチは非ストリーミング（応答までのローディング表示のみ）。体感速度を上げるなら SSE 対応。
 - 用途別モデル使い分け（軽い励まし=高速モデル）は未実装（現状すべて `claude-opus-4-8`）。
 - Goals の metric は表示できるが、`metric` を**設定するUIが無い**（常に未設定）。
 - if-then きっかけは現状 task のみ（月間サブタスク/回路ノードには未対応）。
