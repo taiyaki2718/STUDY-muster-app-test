@@ -450,6 +450,30 @@ body {
 @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 @keyframes popIn { 0% { opacity: 0; transform: translateY(-20px) scale(0.9); } 100% { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+
+/* If-then cue line (実行意図) shown under a task */
+.cue-line { display: inline-flex; align-items: center; gap: 5px; margin-top: 5px; font-size: 0.72rem; font-weight: 600; color: var(--holo-cyan); opacity: 0.95; }
+[data-theme="light"] .cue-line { color: var(--text-cyan); }
+.cue-line svg { flex-shrink: 0; }
+
+/* Identity banner (なりたい自分) on Home */
+.identity-banner { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-radius: 16px; background: rgba(79,209,197,0.08); border: 1px solid var(--glass-border); }
+.identity-banner .id-label { font-size: 0.65rem; letter-spacing: 0.1em; color: var(--text-muted); font-weight: 700; }
+.identity-banner .id-text { font-size: 0.95rem; font-weight: 600; color: var(--text-cyan); text-shadow: var(--text-glow-cyan); }
+
+/* Onboarding overlay (first run) */
+.onb { position: fixed; inset: 0; z-index: 400; background: var(--bg-core);
+  background-image: radial-gradient(circle at 18% 18%, rgba(79,209,197,0.18), transparent 55%), radial-gradient(circle at 82% 82%, rgba(77,154,236,0.18), transparent 55%);
+  display: flex; flex-direction: column; overflow-y: auto; animation: fade 0.4s var(--ease) both; }
+.onb__inner { width: 100%; max-width: 460px; margin: auto; padding: calc(28px + env(safe-area-inset-top)) 22px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 22px; }
+.onb__dots { display: flex; gap: 8px; justify-content: center; }
+.onb__dot { width: 8px; height: 8px; border-radius: 50%; background: rgba(255,255,255,0.18); transition: 0.3s; }
+.onb__dot.is-on { background: var(--holo-cyan); box-shadow: var(--glow-cyan); width: 22px; border-radius: 99px; }
+.onb__title { font-size: 1.5rem; font-weight: 700; line-height: 1.4; }
+.onb__title .accent { color: var(--text-cyan); text-shadow: var(--text-glow-cyan); }
+.onb__sub { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; }
+.onb__why { font-size: 0.72rem; color: var(--text-muted); opacity: 0.85; line-height: 1.5; margin-top: 4px; }
+.onb__skip { background: none; border: none; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; padding: 8px; text-decoration: underline; }
 </style>
 <script type="importmap">
 {
@@ -625,8 +649,19 @@ function seed() {
     cards: [],
     timer: { lastDurationMin: 25, sessions: [] },
     activeTimerTarget: null,
-    xp: 0, level: 1, streak: 0, lastActiveDate: null
+    xp: 0, level: 1, streak: 0, lastActiveDate: null,
+    identity: '', onboarded: false
   };
+}
+
+/* 初回オンボーディングを出すべきか。既存データがあれば「もう使っている人」と見なし出さない。 */
+function shouldOnboard(state) {
+  if (state.onboarded === true) return false;
+  const used = (state.goals && state.goals.length) ||
+               (state.tasks && state.tasks.length) ||
+               (state.cards && state.cards.length) ||
+               (state.monthGoals && Object.keys(state.monthGoals).length);
+  return !used;
 }
 
 /* ------------------------------------------------------------
@@ -769,6 +804,21 @@ function reducer(state, a) {
     
     case 'SET_ACTIVE_TIMER_TARGET': return { ...state, activeTimerTarget: a.target };
     case 'SET_SETTINGS': return { ...state, settings: { ...state.settings, ...a.patch } };
+    case 'SET_IDENTITY': return { ...state, identity: a.identity };
+    case 'COMPLETE_ONBOARDING': {
+      let next = { ...state, onboarded: true };
+      if (a.identity != null) next.identity = a.identity.trim();
+      if (a.goal && a.goal.title && a.goal.title.trim()) {
+        next.goals = [...next.goals, { id: uid(), title: a.goal.title.trim(), deadline: a.goal.deadline || addDays(today(), 30) }];
+      }
+      if (a.task && a.task.title && a.task.title.trim()) {
+        const tk = { id: uid(), title: a.task.title.trim(), date: today(), done: false };
+        const cue = a.task.cue && a.task.cue.trim();
+        if (cue) tk.cue = cue;
+        next.tasks = [...next.tasks, tk];
+      }
+      return next;
+    }
     case 'IMPORT': return { ...seed(), ...a.state };
     default: return state;
   }
@@ -838,6 +888,13 @@ function Home({ go }) {
         <div class="holo-clock-date">${dateStr}</div>
       </div>
 
+      ${state.identity ? html`
+        <div class="identity-banner">
+          <${Icon} n="spark" size=18/>
+          <div><div class="id-label">なりたい自分</div><div class="id-text">${state.identity}</div></div>
+        </div>
+      ` : null}
+
       <div class="goal-core-wrapper">
         <div class="goal-core">
           <div class="core-orbit core-orbit-1"></div>
@@ -865,7 +922,10 @@ function Home({ go }) {
           ${todayTasks.length ? todayTasks.map(tk => html`
             <div class="holo-item ${tk.done ? 'is-done' : ''}" key=${tk.id}>
               <div onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></div>
-              <div class="holo-item__text">${tk.title}</div>
+              <div class="holo-item__text">
+                ${tk.title}
+                ${tk.cue ? html`<div class="cue-line"><${Icon} n="branch" size=12/> ${tk.cue} のとき</div>` : null}
+              </div>
               <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
                 dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: tk.id, title: tk.title } });
                 go('timer');
@@ -895,7 +955,8 @@ function Calendar({ go }) {
   const [subTxt, setSubTxt] = useState('');
   const [selDate, setSelDate] = useState(today());
   const [taskTxt, setTaskTxt] = useState('');
-  const [actionNode, setActionNode] = useState(null); 
+  const [cueTxt, setCueTxt] = useState('');
+  const [actionNode, setActionNode] = useState(null);
   
   const mp = `${mDate.y}-${pad(mDate.m + 1)}`;
   const mGoal = state.monthGoals[mp] || { title: '', subtasks: [] };
@@ -905,9 +966,11 @@ function Calendar({ go }) {
   const addSub = () => { if(subTxt.trim()) { dispatch({ type: 'ADD_MONTH_SUBTASK', month: mp, title: subTxt.trim() }); setSubTxt(''); } };
 
   const addTask = () => {
-    if (!taskTxt.trim()) return; 
-    dispatch({ type: 'ADD_TASK', task: { id: uid(), title: taskTxt.trim(), date: selDate, done: false } }); 
-    setTaskTxt(''); addToast('タスクを追加しました', 'success');
+    if (!taskTxt.trim()) return;
+    const task = { id: uid(), title: taskTxt.trim(), date: selDate, done: false };
+    if (cueTxt.trim()) task.cue = cueTxt.trim();
+    dispatch({ type: 'ADD_TASK', task });
+    setTaskTxt(''); setCueTxt(''); addToast('タスクを追加しました', 'success');
   };
 
   const dim = new Date(mDate.y, mDate.m + 1, 0).getDate();
@@ -996,7 +1059,10 @@ function Calendar({ go }) {
           ${selectedTasks.length ? selectedTasks.map(tk => html`
             <div class="holo-item ${tk.done ? 'is-done' : ''}" key=${tk.id} style="padding: 10px;">
               <div onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></div>
-              <div class="holo-item__text" style="font-size:0.85rem;">${tk.title}</div>
+              <div class="holo-item__text" style="font-size:0.85rem;">
+                ${tk.title}
+                ${tk.cue ? html`<div class="cue-line"><${Icon} n="branch" size=12/> ${tk.cue} のとき</div>` : null}
+              </div>
               <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
                 dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: tk.id, title: tk.title } });
                 go('timer');
@@ -1005,12 +1071,13 @@ function Calendar({ go }) {
             </div>
           `) : html`<div class="holo-label text-center" style="padding:10px;">タスクはありません</div>`}
         </div>
-        <div class="flex-row">
+        <div class="flex-row mb-4">
           <input class="glass-input" placeholder="タスクを追加..." value=${taskTxt} onInput=${e => setTaskTxt(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') addTask(); }}/>
           <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addTask}><${Icon} n="plus"/></button>
         </div>
+        <input class="glass-input" style="font-size:0.85rem;" placeholder="いつやる？ きっかけ（任意・if-then）: 例 朝食後に" value=${cueTxt} onInput=${e => setCueTxt(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') addTask(); }}/>
       </div>
-      
+
       ${actionNode && currentMap ? html`<${ActionModal} node=${currentMap.nodes[actionNode]} map=${currentMap} onClose=${() => setActionNode(null)} go=${go}/>` : null}
     </div>
   `;
@@ -1759,7 +1826,10 @@ function Settings() {
     <div class="app__inner">
       <div class="glass-panel">
         <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="settings"/></div><div class="holo-label">システム設定</div></div></div>
-        
+
+        <div class="holo-label mb-2 mt-4">なりたい自分（アイデンティティ）</div>
+        <input class="glass-input mb-4" placeholder="例: 毎日少しずつ学ぶ人" value=${state.identity || ''} onInput=${e => dispatch({ type: 'SET_IDENTITY', identity: e.currentTarget.value })} />
+
         <div class="flex-between mb-4 mt-4">
           <div class="holo-label">音量</div>
           <div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${Math.round(state.settings.soundVolume * 100)}%</div>
@@ -1782,6 +1852,89 @@ function Settings() {
           <span class="holo-label">開発者</span>
           <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">たいやき</span>
         </div>
+      </div>
+    </div>
+  `;
+}
+
+// ----- ONBOARDING (first-run, lowest-friction first step) -----
+// 行動科学の核を3ステップに凝縮:
+//  ① アイデンティティ(Atomic Habits) ② 具体的な目標(Locke & Latham)
+//  ③ 2分でできる最初の一歩(Fogg) ＋ if-thenきっかけ(Gollwitzer)
+// いつでもスキップ可能（押し付けない＝ダークパターンにしない）。
+function Onboarding() {
+  const { dispatch, addToast } = useApp();
+  const [step, setStep] = useState(0);
+  const [identity, setIdentity] = useState('');
+  const [goal, setGoal] = useState('');
+  const [task, setTask] = useState('');
+  const [cue, setCue] = useState('');
+
+  const finish = (skip) => {
+    dispatch({
+      type: 'COMPLETE_ONBOARDING',
+      identity: skip ? '' : identity,
+      goal: skip ? null : { title: goal },
+      task: skip ? null : { title: task, cue }
+    });
+    if (!skip && task.trim()) addToast('最初の一歩を今日のタスクに追加しました', 'success');
+  };
+
+  const next = () => setStep(s => Math.min(2, s + 1));
+  const back = () => setStep(s => Math.max(0, s - 1));
+
+  return html`
+    <div class="onb">
+      <div class="onb__inner">
+        <div class="onb__dots">
+          ${[0,1,2].map(i => html`<div key=${i} class="onb__dot ${i === step ? 'is-on' : ''}"></div>`)}
+        </div>
+
+        ${step === 0 ? html`
+          <div>
+            <div class="onb__title">ようこそ。<br/>まず<span class="accent">なりたい自分</span>を。</div>
+            <div class="onb__sub mt-4">目標は「何をするか」より「どんな人になりたいか」から始めると続きます。</div>
+          </div>
+          <input class="glass-input" placeholder="例: 毎日少しずつ学ぶ人" value=${identity} onInput=${e => setIdentity(e.currentTarget.value)} />
+          <div class="onb__why">なぜ効く？ ── アイデンティティに紐づく習慣は長続きする（Atomic Habits）。空欄でもOK。</div>
+          <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${next}>次へ</button>
+          <button class="onb__skip" onClick=${() => finish(true)}>スキップして始める</button>
+        ` : null}
+
+        ${step === 1 ? html`
+          <div>
+            <div class="onb__title">いま一番叶えたい<br/><span class="accent">目標を1つ</span>。</div>
+            <div class="onb__sub mt-4">具体的なほど叶いやすい。ざっくりでも大丈夫、あとで育てられます。</div>
+          </div>
+          <input class="glass-input" placeholder="例: 英語を話せるようになる" value=${goal} onInput=${e => setGoal(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter' && goal.trim()) next(); }} />
+          <div class="onb__why">なぜ効く？ ── 具体的で挑戦的な目標は達成率を上げる（Locke & Latham）。</div>
+          <div class="flex-row">
+            <button class="glass-btn" style="flex:0 0 auto;" onClick=${back}>戻る</button>
+            <button class="glass-btn glass-btn--primary" style="flex:1;" onClick=${next}>次へ</button>
+          </div>
+          <button class="onb__skip" onClick=${() => finish(true)}>スキップして始める</button>
+        ` : null}
+
+        ${step === 2 ? html`
+          <div>
+            <div class="onb__title">最初の一歩を<br/><span class="accent">2分でできる</span>大きさに。</div>
+            <div class="onb__sub mt-4">今日やる、ごく小さな一歩。そして「いつやるか」を決めておくと実行率が跳ね上がります。</div>
+          </div>
+          <div>
+            <div class="holo-label mb-2">2分の一歩</div>
+            <input class="glass-input" placeholder="例: 教科書を1ページ開く" value=${task} onInput=${e => setTask(e.currentTarget.value)} />
+          </div>
+          <div>
+            <div class="holo-label mb-2">いつやる？（きっかけ・任意）</div>
+            <input class="glass-input" placeholder="例: 朝コーヒーを淹れたら" value=${cue} onInput=${e => setCue(e.currentTarget.value)} />
+          </div>
+          <div class="onb__why">なぜ効く？ ── 「Xしたら、Yする」の if-then 計画は最もコスパの高い介入（Gollwitzer）。摩擦は2分まで下げる（Fogg）。</div>
+          <div class="flex-row">
+            <button class="glass-btn" style="flex:0 0 auto;" onClick=${back}>戻る</button>
+            <button class="glass-btn glass-btn--primary" style="flex:1;" onClick=${() => finish(false)}>始める</button>
+          </div>
+          <button class="onb__skip" onClick=${() => finish(true)}>スキップして始める</button>
+        ` : null}
       </div>
     </div>
   `;
@@ -1833,9 +1986,13 @@ function App() {
 
   const View = VIEWS[tab] || Home;
 
+  const onboarding = shouldOnboard(state);
+
   return html`
     <${Ctx.Provider} value=${{ state, dispatch, addToast }}>
-      
+
+      ${onboarding ? html`<${Onboarding} />` : null}
+
       <!-- Theme Toggle (Top Right) -->
       <button class="theme-toggle" onClick=${toggleTheme}>
         <${Icon} n=${state.settings.theme === 'dark' ? 'sun' : 'moon'}/>
