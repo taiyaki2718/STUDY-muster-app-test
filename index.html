@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HEARTHFALL — 創発シミュレーション プロトタイプ</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#161b22; --panel2:#1c232d; --line:#2a3340;
+    --txt:#d7e0ea; --dim:#8b97a6; --accent:#4ea1ff; --good:#5fd38a; --bad:#ff6b6b; --warn:#ffcf5c;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:var(--bg);color:var(--txt);
+    font-family:ui-sans-serif,system-ui,"Segoe UI",Roboto,"Hiragino Sans","Noto Sans JP",sans-serif;}
+  #app{display:grid;grid-template-columns:1fr 340px;grid-template-rows:auto 1fr;height:100vh;}
+  header{grid-column:1/3;display:flex;align-items:center;gap:14px;padding:8px 14px;
+    background:var(--panel);border-bottom:1px solid var(--line);flex-wrap:wrap}
+  header h1{font-size:15px;margin:0;letter-spacing:.04em}
+  header .tag{font-size:11px;color:var(--dim)}
+  .ctrls{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+  button{background:var(--panel2);color:var(--txt);border:1px solid var(--line);
+    border-radius:6px;padding:5px 10px;font-size:12px;cursor:pointer}
+  button:hover{border-color:var(--accent)}
+  button.active{background:var(--accent);color:#04121f;border-color:var(--accent);font-weight:600}
+  .stat{font-size:12px;color:var(--dim)}
+  .stat b{color:var(--txt)}
+  #stage{position:relative;overflow:hidden;background:#0a0d12}
+  canvas{display:block;image-rendering:pixelated}
+  #side{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:10px}
+  .sect{margin-bottom:14px}
+  .sect h2{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);
+    margin:0 0 6px;border-bottom:1px solid var(--line);padding-bottom:4px}
+  .row{display:flex;justify-content:space-between;font-size:12px;margin:2px 0}
+  .bar{height:6px;border-radius:3px;background:#222c38;overflow:hidden;margin:3px 0 7px}
+  .bar > i{display:block;height:100%}
+  .chip{display:inline-block;font-size:10px;padding:1px 6px;border:1px solid var(--line);
+    border-radius:10px;color:var(--dim);margin:1px 2px 1px 0}
+  #chronicle{font-size:12px;line-height:1.5}
+  #chronicle .e{padding:5px 7px;border-left:2px solid var(--line);margin-bottom:5px;background:var(--panel2);border-radius:0 5px 5px 0}
+  #chronicle .e.good{border-color:var(--good)} #chronicle .e.bad{border-color:var(--bad)}
+  #chronicle .e .t{color:var(--dim);font-size:10px}
+  .overlays{display:flex;flex-wrap:wrap;gap:4px}
+  .legend{font-size:10px;color:var(--dim);margin-top:6px}
+  .mini{font-size:10px;color:var(--dim)}
+  .mem{font-size:11px;color:var(--dim);margin:2px 0;padding-left:8px;border-left:2px solid var(--line)}
+  .rel{font-size:11px;margin:2px 0;display:flex;justify-content:space-between;gap:6px}
+  .hint{font-size:11px;color:var(--dim);font-style:italic}
+  a{color:var(--accent)}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>🔥 HEARTHFALL</h1>
+    <span class="tag">創発シミュレーション 縦スライス v0.1</span>
+    <div class="ctrls">
+      <button id="btnPlay" class="active">⏸ 一時停止</button>
+      <button data-speed="1" class="spd active">x1</button>
+      <button data-speed="3" class="spd">x3</button>
+      <button data-speed="8" class="spd">x8</button>
+      <button id="btnReset">↻ 新しい世界</button>
+    </div>
+    <div class="ctrls">
+      <span class="stat">季節 <b id="hSeason">春</b></span>
+      <span class="stat">日 <b id="hDay">0</b></span>
+      <span class="stat">人口 <b id="hPop">0</b></span>
+      <span class="stat">食料 <b id="hFood">0</b></span>
+      <span class="stat">平均幸福 <b id="hMood">0</b></span>
+    </div>
+  </header>
+
+  <div id="stage"><canvas id="cv"></canvas></div>
+
+  <div id="side">
+    <div class="sect">
+      <h2>オーバーレイ（場の可視化）</h2>
+      <div class="overlays" id="overlays"></div>
+      <div class="legend" id="legend">青 = 低 / 赤 = 高</div>
+    </div>
+
+    <div class="sect" id="inspect">
+      <h2>インスペクト</h2>
+      <div class="hint">住人をクリックすると、感情の内訳・関係・記憶を因果追跡できます。</div>
+    </div>
+
+    <div class="sect">
+      <h2>📜 年代記 (Chronicle)</h2>
+      <div id="chronicle"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* =========================================================================
+   HEARTHFALL — 創発シミュレーション 縦スライス
+   生態(拡散方程式) × 心理(PAD/Utility AI/関係/記憶) × 年代記
+   ECS風: コンポーネントは配列(SoA寄り)、システムは純関数的に毎tick実行。
+   決定論: シード付きPRNGで全乱数を駆動。
+   ========================================================================= */
+
+/* ---- 決定論的PRNG (mulberry32) ---- */
+function makeRNG(seed){
+  let a = seed >>> 0;
+  return function(){
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/* ---- 設定 ---- */
+const GW = 56, GH = 38;          // グリッド幅・高さ(タイル)
+const TICKS_PER_DAY = 120;       // 1日のtick数
+const SEASONS = ["春","夏","秋","冬"];
+const DAYS_PER_SEASON = 6;
+const NAMES = ["アスラ","ベルン","カイ","ディラ","エルナ","フィン","ガロ","ハナ","イオ","ジン",
+  "クレア","ロウ","ミラ","ノア","オリン","ピア","ラン","シオン","トウカ","ウル","ヴェイ","ヤナ"];
+
+/* ---- 世界状態 ---- */
+let RNG, world, tickCount, running=true, speed=1, overlay="biomass", selected=null;
+
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+function lerp(a,b,t){return a+(b-a)*t;}
+
+/* ============ 生態層 (タイル) ============ */
+function initTiles(){
+  const fertility=new Float32Array(GW*GH);
+  const moisture =new Float32Array(GW*GH);
+  const pollution=new Float32Array(GW*GH);
+  const biomass  =new Float32Array(GW*GH);
+  // パーリン的なざらつきを乱数の平滑化で生成
+  for(let i=0;i<GW*GH;i++){ fertility[i]=RNG(); moisture[i]=RNG(); }
+  for(let pass=0;pass<3;pass++){ smooth(fertility); smooth(moisture); }
+  for(let i=0;i<GW*GH;i++){
+    fertility[i]=clamp(fertility[i]*1.3-0.1,0,1);
+    biomass[i]=fertility[i]*moisture[i]*0.9;
+  }
+  return {fertility,moisture,pollution,biomass};
+}
+function smooth(arr){
+  const c=arr.slice();
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    let s=0,n=0;
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+      const nx=x+dx,ny=y+dy; if(nx<0||ny<0||nx>=GW||ny>=GH)continue;
+      s+=c[ny*GW+nx]; n++;
+    }
+    arr[y*GW+x]=s/n;
+  }
+}
+
+/* 拡散方程式 1ステップ: ∂φ/∂t = D∇²φ + S - L */
+function ecologySystem(t){
+  const {fertility,moisture,pollution,biomass}=world.tiles;
+  const season=currentSeason();
+  // 成長率は季節で変調(冬は乏しい)
+  const growth = season==="冬"?0.006 : season==="春"?0.028 : season==="夏"?0.024 : 0.014;
+  const Dm=0.10, Dp=0.18; // 拡散係数: 汚染は速い
+  const mNew=moisture.slice(), pNew=pollution.slice();
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x;
+    let lapM=0,lapP=0,n=0;
+    for(let k=0;k<4;k++){
+      const nx=x+[1,-1,0,0][k], ny=y+[0,0,1,-1][k];
+      if(nx<0||ny<0||nx>=GW||ny>=GH)continue;
+      const j=ny*GW+nx; lapM+=moisture[j]-moisture[i]; lapP+=pollution[j]-pollution[i]; n++;
+    }
+    // 水分: 拡散 + 季節の降雨 - 蒸発（緩やかな季節変動。冬を端境期に）
+    const rain = (season==="春"?0.0015 : season==="夏"?-0.0005 : season==="秋"?0.0008 : 0.0004);
+    mNew[i]=clamp(moisture[i]+Dm*lapM+rain,0,1);
+    // 汚染: 拡散 + 自然分解
+    pNew[i]=clamp(pollution[i]+Dp*lapP-0.003,0,1);
+    // 植生: 肥沃度×水分で成長、汚染で抑制
+    const cap=fertility[i]*moisture[i];
+    biomass[i]=clamp(biomass[i]+growth*(cap-biomass[i])*(1-pollution[i]),0,1);
+  }
+  world.tiles.moisture=mNew; world.tiles.pollution=pNew;
+}
+
+/* ============ 住人 (心理層) ============ */
+function makeColonist(id,x,y){
+  const P=()=>RNG(); // 0..1
+  return {
+    id, name:NAMES[id%NAMES.length]+(id>=NAMES.length?("・"+(1+Math.floor(id/NAMES.length))):""),
+    x,y, alive:true, age:18+Math.floor(RNG()*30),
+    // ニーズ 0(充足)..1(逼迫)
+    needs:{hunger:RNG()*0.3, sleep:RNG()*0.3, social:RNG()*0.3, safety:0.1},
+    inv_food: 4+Math.floor(RNG()*4),
+    // PAD感情
+    pad:{p:0,a:0,d:(RNG()-0.5)*0.4},
+    // Big Five (OCEAN)
+    pers:{o:P(),c:P(),e:P(),ag:P(),n:P()},
+    rel:new Map(),     // id -> {affinity,trust,familiarity,tags:Set}
+    mem:[],            // {text,sal,val,day,subj}
+    action:"待機", target:null, starveTicks:0,
+    color:`hsl(${Math.floor(RNG()*360)} 65% 60%)`
+  };
+}
+function moodOf(c){ // -100..100 程度。PADと未充足ニーズから合成
+  let m = c.pad.p*60;
+  m -= c.needs.hunger*40 + c.needs.sleep*20 + c.needs.social*18 + c.needs.safety*30;
+  // 高salienceな最近の記憶の余韻
+  for(const mm of c.mem){ if(currentDay()-mm.day<6) m += mm.val*mm.sal*22; }
+  return clamp(m,-100,100);
+}
+function moodFactors(c){ // 因果追跡用の内訳
+  const f=[];
+  if(c.needs.hunger>0.05) f.push(["空腹", -Math.round(c.needs.hunger*40)]);
+  if(c.needs.sleep>0.05)  f.push(["疲労", -Math.round(c.needs.sleep*20)]);
+  if(c.needs.social>0.05) f.push(["孤独", -Math.round(c.needs.social*18)]);
+  if(c.needs.safety>0.05) f.push(["不安", -Math.round(c.needs.safety*30)]);
+  if(Math.abs(c.pad.p)>0.02) f.push([c.pad.p>0?"気分の高揚":"気分の落込み", Math.round(c.pad.p*60)]);
+  for(const mm of c.mem){ if(currentDay()-mm.day<6){
+    const v=Math.round(mm.val*mm.sal*22); if(v!==0) f.push(["記憶: "+mm.text, v]);
+  }}
+  return f.sort((a,b)=>Math.abs(b[1])-Math.abs(a[1])).slice(0,6);
+}
+
+/* ニーズ自然減衰(逼迫へ増加) */
+function needSystem(){
+  for(const c of world.colonists){ if(!c.alive)continue;
+    c.needs.hunger=clamp(c.needs.hunger+0.0030,0,1);
+    c.needs.sleep =clamp(c.needs.sleep +0.0030,0,1);
+    c.needs.social=clamp(c.needs.social+0.0025*(0.5+c.pers.e),0,1); // 外向的ほど社交欲増
+    c.needs.safety=clamp(c.needs.safety-0.004,0,1); // 平時は安心へ回復
+  }
+}
+
+/* 効用カーブ */
+function curve(n,type){
+  if(type==="exp") return n*n;       // 飢餓: 逼迫で急騰
+  if(type==="lin") return n;         // 線形
+  return n;
+}
+function rel(c,oid){
+  if(!c.rel.has(oid)) c.rel.set(oid,{affinity:0,trust:0,familiarity:0,tags:new Set()});
+  return c.rel.get(oid);
+}
+
+/* ============ Utility AI: 行動決定 ============ */
+function decisionSystem(){
+  for(const c of world.colonists){ if(!c.alive)continue;
+    const opts=[];
+    // 食べる(手持ち食料がある): 空腹の直接解。最優先になりうる
+    if(c.inv_food>0) opts.push({a:"食事",u:curve(c.needs.hunger,"exp")*1.4});
+    // 採集: 手持ちが尽きていれば食べるために採る。余裕があるときは備蓄として採る
+    const ft=findForage(c);
+    if(ft){
+      const eatForage = c.inv_food===0 ? curve(c.needs.hunger,"exp")*1.2 : 0;
+      const reserveDrive = c.inv_food<5 ? 0.16*(1-c.needs.hunger) : 0;
+      opts.push({a:"採集",u:eatForage+reserveDrive,tgt:ft});
+    }
+    // 睡眠
+    opts.push({a:"睡眠",u:curve(c.needs.sleep,"lin")*0.85});
+    // 社交(近くに誰か)
+    const sp=findSocial(c); if(sp) opts.push({a:"社交",u:curve(c.needs.social,"lin")*(0.6+c.pers.e*0.5),tgt:sp.id});
+    // 徘徊(基底)
+    opts.push({a:"徘徊",u:0.12+RNG()*0.06});
+    // 性格による微調整(誠実性は採集/食事の計画性を上げる)
+    for(const o of opts){ if(o.a==="採集"||o.a==="食事") o.u*=(0.8+c.pers.c*0.4); }
+    opts.sort((a,b)=>b.u-a.u);
+    const best=opts[0];
+    c.action=best.a; c.target=best.tgt??null;
+  }
+}
+function findForage(c){
+  let best=null,bv=0.10;
+  for(let dy=-5;dy<=5;dy++)for(let dx=-5;dx<=5;dx++){
+    const x=c.x+dx,y=c.y+dy; if(x<0||y<0||x>=GW||y>=GH)continue;
+    const b=world.tiles.biomass[y*GW+x];
+    const d=Math.abs(dx)+Math.abs(dy);
+    const score=b-d*0.015;
+    if(b>0.12 && score>bv){bv=score;best={x,y};}
+  }
+  return best;
+}
+function findSocial(c){
+  let best=null,bd=9;
+  for(const o of world.colonists){ if(o===c||!o.alive)continue;
+    const d=Math.abs(o.x-c.x)+Math.abs(o.y-c.y);
+    if(d<=3 && d<bd){bd=d;best=o;}
+  }
+  return best;
+}
+
+/* ============ 行動実行 + 相互作用(関係/記憶) ============ */
+function step(v,t){return v<t?1:(v>t?-1:0);}
+function moveToward(c,tx,ty){
+  c.x=clamp(c.x+step(c.x,tx),0,GW-1);
+  c.y=clamp(c.y+step(c.y,ty),0,GH-1);
+}
+function actionSystem(){
+  for(const c of world.colonists){ if(!c.alive)continue;
+    switch(c.action){
+      case "食事":
+        if(c.inv_food>0){ c.inv_food--; c.needs.hunger=clamp(c.needs.hunger-0.5,0,1); padImpulse(c,0.12,0,0.02);}
+        break;
+      case "採集":{
+        const tg=c.target;
+        if(tg){ if(c.x!==tg.x||c.y!==tg.y){ moveToward(c,tg.x,tg.y);}
+          else { const i=tg.y*GW+tg.x; const got=Math.min(world.tiles.biomass[i],0.28);
+            if(got>0.04){ world.tiles.biomass[i]-=got; c.inv_food+=Math.max(1,Math.round(got*7));
+              // 採集は土壌をわずかに疲弊させ、活動は汚染をわずかに出す(層間結合)
+              world.tiles.fertility[i]=clamp(world.tiles.fertility[i]-0.01,0,1);
+              world.tiles.pollution[i]=clamp(world.tiles.pollution[i]+0.01,0,1);
+            }
+          }
+        }
+        // 食料の奪い合い → 紛争(欠乏が心理に作用)
+        maybeConflict(c);
+        break;}
+      case "睡眠":
+        c.needs.sleep=clamp(c.needs.sleep-0.05,0,1); padImpulse(c,0.01,-0.02,0);
+        break;
+      case "社交":{
+        const o=world.colonists.find(z=>z.id===c.target&&z.alive);
+        if(o){ if(Math.abs(o.x-c.x)+Math.abs(o.y-c.y)>1) moveToward(c,o.x,o.y);
+          else socialize(c,o); }
+        break;}
+      default: // 徘徊
+        c.x=clamp(c.x+Math.round(RNG()*2-1),0,GW-1);
+        c.y=clamp(c.y+Math.round(RNG()*2-1),0,GH-1);
+    }
+  }
+}
+function padImpulse(c,dp,da,dd){
+  c.pad.p=clamp(c.pad.p+dp,-1,1); c.pad.a=clamp(c.pad.a+da,-1,1); c.pad.d=clamp(c.pad.d+dd,-1,1);
+}
+function addMemory(c,text,val,sal,subj){
+  c.mem.unshift({text,val,sal,day:currentDay(),subj}); if(c.mem.length>14)c.mem.pop();
+}
+
+function socialize(c,o){
+  c.needs.social=clamp(c.needs.social-0.06,0,1);
+  o.needs.social=clamp(o.needs.social-0.04,0,1);
+  const ra=rel(c,o.id), rb=rel(o,c.id);
+  ra.familiarity=clamp(ra.familiarity+0.03,0,1); rb.familiarity=clamp(rb.familiarity+0.03,0,1);
+  // 相性: 性格類似 + 協調性で好意増減
+  const sim=1-(Math.abs(c.pers.o-o.pers.o)+Math.abs(c.pers.ag-o.pers.ag))/2;
+  const dlt=(sim-0.45)*0.05*(0.6+c.pers.ag);
+  ra.affinity=clamp(ra.affinity+dlt,-1,1); rb.affinity=clamp(rb.affinity+dlt,-1,1);
+  padImpulse(c,0.03*Math.sign(dlt||1),0.01,0); padImpulse(o,0.03*Math.sign(dlt||1),0.01,0);
+  // 絆の成立(設計外の婚姻/親友)
+  if(ra.affinity>0.7 && rb.affinity>0.7 && !ra.tags.has("絆") && ra.familiarity>0.4){
+    ra.tags.add("絆"); rb.tags.add("絆");
+    chronicle(`${c.name}と${o.name}は深い絆で結ばれた。共に過ごした時間が二人を近づけた。`,"good");
+    addMemory(c,`${o.name}との絆`,0.9,0.9,o.id); addMemory(o,`${c.name}との絆`,0.9,0.9,c.id);
+    padImpulse(c,0.3,0.1,0.1); padImpulse(o,0.3,0.1,0.1);
+  }
+}
+
+/* 採集競合での紛争: 近くに別の空腹者がいて植生が乏しいと衝突 */
+function maybeConflict(c){
+  if(c.needs.hunger<0.55) return;
+  for(const o of world.colonists){ if(o===c||!o.alive)continue;
+    if(Math.abs(o.x-c.x)+Math.abs(o.y-c.y)>1) continue;
+    if(o.needs.hunger<0.5) continue;
+    if(RNG()>0.12) continue;
+    // 支配性(PAD d + 外向 - 協調)が高い方が押しのける
+    const domC=c.pad.d+c.pers.e-c.pers.ag, domO=o.pad.d+o.pers.e-o.pers.ag;
+    const win = domC>=domO? c : o, lose = win===c? o : c;
+    // 勝者は食料を一部奪う
+    if(lose.inv_food>0){ lose.inv_food--; win.inv_food++; }
+    padImpulse(win,0.05,0.2,0.15); padImpulse(lose,-0.18,0.25,-0.2);
+    const rl=rel(lose,win.id); rl.affinity=clamp(rl.affinity-0.3,-1,1); rl.trust=clamp(rl.trust-0.3,-1,1);
+    rl.tags.add("遺恨");
+    addMemory(lose,`${win.name}に食料を奪われ突き飛ばされた`,-0.8,0.85,win.id);
+    lose.needs.safety=clamp(lose.needs.safety+0.4,0,1);
+    chronicle(`食料を巡る諍い。${win.name}が${lose.name}を突き飛ばした。`,"bad");
+    return;
+  }
+}
+
+/* 感情のホメオスタシス(性格baselineへ減衰) */
+function emotionSystem(){
+  for(const c of world.colonists){ if(!c.alive)continue;
+    const baseP=(c.pers.e-c.pers.n)*0.2; // 外向で快寄り/神経症で不快寄り
+    c.pad.p+=(baseP-c.pad.p)*0.02; c.pad.a+=(0-c.pad.a)*0.04; c.pad.d+=((c.pers.e-0.5)*0.3-c.pad.d)*0.02;
+    // 記憶の忘却(salience減衰、神経症が高いほど残る)
+    for(const m of c.mem){ m.sal*=(0.992+ c.pers.n*0.006); }
+    c.mem=c.mem.filter(m=>m.sal>0.05);
+  }
+}
+
+/* 飢餓・死 */
+function survivalSystem(){
+  for(const c of world.colonists){ if(!c.alive)continue;
+    if(c.needs.hunger>=0.999){ c.starveTicks++; } else c.starveTicks=Math.max(0,c.starveTicks-1);
+    if(c.starveTicks>TICKS_PER_DAY*1.6){
+      c.alive=false;
+      chronicle(`${c.name}が飢えて命を落とした。`,"bad");
+      // 目撃者(近隣)に喪失の記憶
+      for(const o of world.colonists){ if(o===c||!o.alive)continue;
+        if(Math.abs(o.x-c.x)+Math.abs(o.y-c.y)<=4){
+          const r=rel(o,c.id);
+          const val=-0.6-(r.affinity>0?r.affinity*0.4:0);
+          addMemory(o,`${c.name}の死を看取った`,val,0.9,c.id);
+          padImpulse(o,-0.3,0.2,-0.1); o.needs.safety=clamp(o.needs.safety+0.5,0,1);
+        }
+      }
+    }
+  }
+}
+
+/* ============ 繁殖（世代交代の創発ループ） ============ */
+const POP_CAP=40;
+function spawnChild(a,b){
+  const id=world.nextId++;
+  const x=clamp(a.x+Math.round(RNG()*2-1),0,GW-1), y=clamp(a.y+Math.round(RNG()*2-1),0,GH-1);
+  const c=makeColonist(id,x,y);
+  c.age=0; c.inv_food=2;
+  // 性格は両親の平均＋ゆらぎ
+  for(const k of ["o","c","e","ag","n"]) c.pers[k]=clamp((a.pers[k]+b.pers[k])/2+(RNG()-0.5)*0.2,0,1);
+  // 親子関係
+  rel(c,a.id).tags.add("親"); rel(c,b.id).tags.add("親");
+  rel(a,c.id).tags.add("子"); rel(b,c.id).tags.add("子");
+  rel(a,c.id).affinity=0.6; rel(b,c.id).affinity=0.6;
+  world.colonists.push(c);
+  chronicle(`${a.name}と${b.name}の間に子 ${c.name} が生まれた。`,"good");
+  padImpulse(a,0.3,0.1,0.05); padImpulse(b,0.3,0.1,0.05);
+}
+function reproductionSystem(){
+  const pop=world.colonists.filter(c=>c.alive).length;
+  if(pop>=POP_CAP) return;
+  for(const c of world.colonists){ if(!c.alive||c.needs.hunger>0.4||c.age<18||c.age>48)continue;
+    for(const [oid,r] of c.rel){
+      if(!r.tags.has("絆")) continue;
+      if(c.id>oid) continue; // ペアにつき一度だけ判定
+      const o=world.colonists.find(z=>z.id===oid&&z.alive);
+      if(!o||o.needs.hunger>0.4||o.age<18||o.age>48) continue;
+      if(Math.abs(o.x-c.x)+Math.abs(o.y-c.y)>2) continue;
+      if(RNG()<0.006){ spawnChild(c,o); return; } // 1tickにつき最大1誕生
+    }
+  }
+}
+
+/* ============ 加齢と寿命（世代の自然な循環） ============ */
+function agingSystem(){
+  // 季節ごとに1歳
+  if(tickCount % (TICKS_PER_DAY*DAYS_PER_SEASON) !== 0) return;
+  for(const c of world.colonists){ if(!c.alive)continue;
+    c.age++;
+    if(c.age>62){
+      const p=0.04*(c.age-62); // 加齢で死亡率上昇
+      if(RNG()<p){
+        c.alive=false;
+        chronicle(`長老 ${c.name} が${c.age}歳で静かに息を引き取った。`,"");
+        for(const o of world.colonists){ if(o===c||!o.alive)continue;
+          const r=rel(o,c.id);
+          if(r.affinity>0.3 || r.tags.has("子") || r.tags.has("親")){
+            addMemory(o,`${c.name}との別れ`,-0.5-r.affinity*0.3,0.85,c.id);
+            padImpulse(o,-0.25,0.1,0);
+          }
+        }
+      }
+    }
+  }
+}
+
+/* ============ 年代記 ============ */
+function chronicle(text,kind){
+  world.chronicle.unshift({text,kind:kind||"",season:currentSeason(),day:currentDay()});
+  if(world.chronicle.length>120) world.chronicle.pop();
+  renderChronicle();
+}
+
+/* ============ 時間 ============ */
+function currentDay(){ return Math.floor(tickCount/TICKS_PER_DAY); }
+function currentSeason(){ return SEASONS[Math.floor(currentDay()/DAYS_PER_SEASON)%4]; }
+
+/* ============ tick ============ */
+function tick(){
+  ecologySystem(tickCount);
+  needSystem();
+  decisionSystem();
+  actionSystem();
+  emotionSystem();
+  survivalSystem();
+  reproductionSystem();
+  agingSystem();
+  tickCount++;
+  // 季節替わりの記録
+  if(tickCount%(TICKS_PER_DAY*DAYS_PER_SEASON)===0){
+    chronicle(`季節は${currentSeason()}へと移ろった。`,"");
+  }
+}
+
+/* ============ 描画 ============ */
+const cv=document.getElementById("cv"), ctx=cv.getContext("2d");
+let TILE=14;
+function resize(){
+  const stage=document.getElementById("stage");
+  TILE=Math.floor(Math.min(stage.clientWidth/GW, stage.clientHeight/GH));
+  cv.width=GW*TILE; cv.height=GH*TILE;
+  cv.style.marginLeft=((stage.clientWidth-cv.width)/2)+"px";
+  cv.style.marginTop=((stage.clientHeight-cv.height)/2)+"px";
+}
+function heat(v){ // 0..1 -> 青->緑->赤
+  v=clamp(v,0,1);
+  const h=(1-v)*220; return `hsl(${h} 70% ${30+v*20}%)`;
+}
+function render(){
+  const T=world.tiles;
+  for(let y=0;y<GH;y++)for(let x=0;x<GW;x++){
+    const i=y*GW+x; let col;
+    if(overlay==="biomass"){ const b=T.biomass[i];
+      col=`hsl(${100} ${30+b*50}% ${8+b*32}%)`; }
+    else if(overlay==="fertility") col=heat(T.fertility[i]);
+    else if(overlay==="moisture")  col=heat(T.moisture[i]);
+    else if(overlay==="pollution") col=heat(T.pollution[i]);
+    else col=`hsl(100 ${30+T.biomass[i]*50}% ${8+T.biomass[i]*32}%)`;
+    ctx.fillStyle=col; ctx.fillRect(x*TILE,y*TILE,TILE,TILE);
+  }
+  // 住人
+  for(const c of world.colonists){ if(!c.alive)continue;
+    const px=c.x*TILE+TILE/2, py=c.y*TILE+TILE/2, r=Math.max(3,TILE*0.34);
+    // 気分リング
+    const m=moodOf(c);
+    ctx.beginPath(); ctx.arc(px,py,r+2,0,Math.PI*2);
+    ctx.strokeStyle = m<-30? "#ff6b6b" : m>30? "#5fd38a" : "#8b97a6";
+    ctx.lineWidth=2; ctx.stroke();
+    ctx.beginPath(); ctx.arc(px,py,r,0,Math.PI*2);
+    ctx.fillStyle=c.color; ctx.fill();
+    if(selected===c){ ctx.beginPath(); ctx.arc(px,py,r+6,0,Math.PI*2);
+      ctx.strokeStyle="#4ea1ff"; ctx.lineWidth=2; ctx.stroke(); }
+    // 行動アイコン
+    const icon={食事:"🍖",採集:"🌾",睡眠:"💤",社交:"💬",徘徊:""}[c.action]||"";
+    if(icon&&TILE>=12){ ctx.font=`${Math.floor(TILE*0.6)}px serif`; ctx.textAlign="center";
+      ctx.fillText(icon,px,py-r-3); }
+  }
+}
+
+/* ============ UI ============ */
+const OVERLAYS=[["biomass","植生"],["fertility","肥沃度"],["moisture","水分"],["pollution","汚染"]];
+function buildOverlayButtons(){
+  const box=document.getElementById("overlays"); box.innerHTML="";
+  for(const [k,label] of OVERLAYS){
+    const b=document.createElement("button");
+    b.textContent=label; b.className=overlay===k?"active":"";
+    b.onclick=()=>{overlay=k; buildOverlayButtons();
+      document.getElementById("legend").textContent =
+        k==="biomass"?"暗緑 = 植生少 / 明緑 = 植生多":"青 = 低 / 赤 = 高"; };
+    box.appendChild(b);
+  }
+}
+function bar(val,color){ return `<div class="bar"><i style="width:${clamp(val*100,0,100)}%;background:${color}"></i></div>`; }
+function renderInspect(){
+  const el=document.getElementById("inspect");
+  if(!selected||!selected.alive){
+    el.innerHTML='<h2>インスペクト</h2><div class="hint">住人をクリックすると、感情の内訳・関係・記憶を因果追跡できます。</div>';
+    return;
+  }
+  const c=selected, m=Math.round(moodOf(c));
+  let h=`<h2>インスペクト</h2>`;
+  h+=`<div class="row"><b style="color:${c.color}">● ${c.name}</b><span class="mini">${c.age}歳 / ${c.action}</span></div>`;
+  h+=`<div class="row"><span>気分</span><b style="color:${m<-30?'var(--bad)':m>30?'var(--good)':'var(--txt)'}">${m}</b></div>`;
+  // 気分の内訳(因果追跡)
+  h+=`<div class="mini">▼ 気分の内訳（因果追跡）</div>`;
+  for(const [label,v] of moodFactors(c)){
+    h+=`<div class="rel"><span style="color:var(--dim)">${label}</span><b style="color:${v<0?'var(--bad)':'var(--good)'}">${v>0?'+':''}${v}</b></div>`;
+  }
+  // ニーズ
+  h+=`<div class="mini" style="margin-top:8px">▼ ニーズ（逼迫度）</div>`;
+  const nn=[["空腹","hunger","var(--bad)"],["疲労","sleep","var(--warn)"],["孤独","social","var(--accent)"],["不安","safety","#c98cff"]];
+  for(const [lab,k,col] of nn){ h+=`<div class="row"><span>${lab}</span><span class="mini">${Math.round(c.needs[k]*100)}</span></div>${bar(c.needs[k],col)}`; }
+  h+=`<div class="row"><span>手持ち食料</span><b>${c.inv_food}</b></div>`;
+  // 性格
+  h+=`<div class="mini" style="margin-top:6px">▼ 性格 (OCEAN)</div><div>`;
+  const pp=[["開放",c.pers.o],["誠実",c.pers.c],["外向",c.pers.e],["協調",c.pers.ag],["神経症",c.pers.n]];
+  for(const [lab,v] of pp){ h+=`<span class="chip">${lab} ${Math.round(v*100)}</span>`; } h+=`</div>`;
+  // 関係
+  const rels=[...c.rel.entries()].filter(([id,r])=>r.familiarity>0.05)
+    .sort((a,b)=>Math.abs(b[1].affinity)-Math.abs(a[1].affinity)).slice(0,5);
+  if(rels.length){ h+=`<div class="mini" style="margin-top:6px">▼ 関係</div>`;
+    for(const [id,r] of rels){ const o=world.colonists.find(z=>z.id===id);
+      const tags=[...r.tags].map(t=>`<span class="chip">${t}</span>`).join("");
+      const col=r.affinity>0.2?'var(--good)':r.affinity<-0.2?'var(--bad)':'var(--dim)';
+      h+=`<div class="rel"><span>${o?o.name:"?"}${tags}</span><b style="color:${col}">${r.affinity>0?'+':''}${(r.affinity).toFixed(2)}</b></div>`;
+    }
+  }
+  // 記憶
+  if(c.mem.length){ h+=`<div class="mini" style="margin-top:6px">▼ 記憶（salience順）</div>`;
+    for(const mm of c.mem.slice().sort((a,b)=>b.sal-a.sal).slice(0,5)){
+      h+=`<div class="mem">${mm.val<0?'🔴':'🟢'} ${mm.text} <span class="mini">(${mm.day}日目 / 強度${mm.sal.toFixed(2)})</span></div>`;
+    }
+  }
+  el.innerHTML=h;
+}
+function renderChronicle(){
+  const el=document.getElementById("chronicle");
+  el.innerHTML=world.chronicle.map(e=>
+    `<div class="e ${e.kind}"><div class="t">${e.day}日目・${e.season}</div>${e.text}</div>`).join("");
+}
+function renderHUD(){
+  document.getElementById("hSeason").textContent=currentSeason();
+  document.getElementById("hDay").textContent=currentDay();
+  const alive=world.colonists.filter(c=>c.alive);
+  document.getElementById("hPop").textContent=alive.length;
+  document.getElementById("hFood").textContent=alive.reduce((s,c)=>s+c.inv_food,0);
+  const mm=alive.length?Math.round(alive.reduce((s,c)=>s+moodOf(c),0)/alive.length):0;
+  document.getElementById("hMood").textContent=mm;
+}
+
+/* クリックで住人選択 */
+cv.addEventListener("click",e=>{
+  const rect=cv.getBoundingClientRect();
+  const gx=Math.floor((e.clientX-rect.left)/TILE), gy=Math.floor((e.clientY-rect.top)/TILE);
+  let best=null,bd=3;
+  for(const c of world.colonists){ if(!c.alive)continue;
+    const d=Math.abs(c.x-gx)+Math.abs(c.y-gy); if(d<bd){bd=d;best=c;}
+  }
+  selected=best; renderInspect();
+});
+
+/* ============ メインループ ============ */
+function loop(){
+  if(running){ for(let s=0;s<speed;s++) tick(); }
+  render(); renderHUD(); if(selected) renderInspect();
+  requestAnimationFrame(loop);
+}
+
+/* ============ 初期化 ============ */
+function initWorld(seed){
+  RNG=makeRNG(seed); tickCount=0; selected=null;
+  world={tiles:initTiles(),colonists:[],chronicle:[]};
+  const n=12;
+  for(let i=0;i<n;i++){
+    // 肥沃な場所に初期配置
+    let x,y,tries=0;
+    do{ x=Math.floor(RNG()*GW); y=Math.floor(RNG()*GH); tries++; }
+    while(world.tiles.biomass[y*GW+x]<0.25 && tries<40);
+    world.colonists.push(makeColonist(i,x,y));
+  }
+  world.nextId=n;
+  chronicle(`${n}人の開拓者がこの谷に降り立った。物語が始まる。`,"good");
+}
+
+/* コントロール */
+document.getElementById("btnPlay").onclick=function(){
+  running=!running; this.textContent=running?"⏸ 一時停止":"▶ 再開"; this.classList.toggle("active",running);
+};
+document.querySelectorAll(".spd").forEach(b=>b.onclick=()=>{
+  speed=+b.dataset.speed; document.querySelectorAll(".spd").forEach(x=>x.classList.remove("active")); b.classList.add("active");
+});
+document.getElementById("btnReset").onclick=()=>{ initWorld((Math.random()*1e9)|0); buildOverlayButtons(); renderChronicle(); renderInspect(); };
+
+window.addEventListener("resize",resize);
+buildOverlayButtons();
+initWorld(20260614);
+resize();
+renderChronicle();
+loop();
+</script>
+</body>
+</html>
