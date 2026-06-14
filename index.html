@@ -474,6 +474,19 @@ body {
 .onb__sub { font-size: 0.9rem; color: var(--text-muted); line-height: 1.6; }
 .onb__why { font-size: 0.72rem; color: var(--text-muted); opacity: 0.85; line-height: 1.5; margin-top: 4px; }
 .onb__skip { background: none; border: none; color: var(--text-muted); font-size: 0.85rem; cursor: pointer; padding: 8px; text-decoration: underline; }
+
+/* AI Coach */
+.coach-seg { display: flex; gap: 10px; }
+.coach-seg .glass-btn { flex: 1; }
+.chat-log { display: flex; flex-direction: column; gap: 10px; max-height: 52vh; overflow-y: auto; padding: 4px 2px; margin-bottom: 14px; }
+.chat-msg { max-width: 88%; padding: 12px 16px; border-radius: 18px; font-size: 0.92rem; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.chat-msg.user { align-self: flex-end; background: linear-gradient(135deg, rgba(77,154,236,0.9), rgba(79,209,197,0.9)); color: #fff; border-bottom-right-radius: 6px; }
+.chat-msg.assistant { align-self: flex-start; background: rgba(0,0,0,0.25); border: 1px solid var(--glass-border); border-bottom-left-radius: 6px; }
+[data-theme="light"] .chat-msg.assistant { background: rgba(255,255,255,0.75); }
+.coach-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.coach-chip { padding: 8px 14px; border-radius: 99px; font-size: 0.8rem; font-weight: 600; background: rgba(120,180,255,0.1); border: 1px solid var(--glass-border); color: var(--text-main); cursor: pointer; transition: all 0.2s var(--ease); }
+[data-theme="light"] .coach-chip { background: rgba(255,255,255,0.7); }
+.coach-chip:active { transform: scale(0.96); }
 </style>
 <script type="importmap">
 {
@@ -529,7 +542,9 @@ const ICONS = {
   layers: () => html`<polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>`,
   insight: () => html`<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>`,
   edit: () => html`<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>`,
-  search: () => html`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`
+  search: () => html`<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>`,
+  message: () => html`<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>`,
+  send: () => html`<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`
 };
 
 function Icon({ n, size = 20 }) {
@@ -632,6 +647,124 @@ const AudioEngine = (() => {
       if (!el) return false;
       if (id) return !el.paused && el.dataset.currentId === id;
       return !el.paused;
+    }
+  };
+})();
+
+/* ============================================================
+   AI Coach — BYOK (Bring Your Own Key) Claude API client
+   - APIキーは reducer state ではなく専用の localStorage キーに保存する。
+     こうすることで Settings の JSON エクスポートに鍵が混入しない（プライバシー）。
+   - ブラウザから api.anthropic.com を直接呼ぶ（バックエンド無しの設計を維持）。
+     CORS のため anthropic-dangerous-direct-browser-access ヘッダが必要。
+   - 鍵が無い/オフライン/エラーでもアプリ本体は壊れない（優雅な劣化）。
+   ============================================================ */
+const APIKEY_STORE = 'goalflow:anthropic_key';
+const ApiKeyStore = {
+  get() { try { return localStorage.getItem(APIKEY_STORE) || ''; } catch (e) { return ''; } },
+  set(v) { try { v ? localStorage.setItem(APIKEY_STORE, v) : localStorage.removeItem(APIKEY_STORE); } catch (e) {} },
+  has() { return !!this.get(); }
+};
+
+const ClaudeAPI = (() => {
+  const ENDPOINT = 'https://api.anthropic.com/v1/messages';
+  const MODEL = 'claude-opus-4-8';
+
+  async function call(body) {
+    const key = ApiKeyStore.get();
+    if (!key) { const e = new Error('APIキーが未設定です'); e.code = 'NO_KEY'; throw e; }
+    let res;
+    try {
+      res = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': key,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({ model: MODEL, ...body })
+      });
+    } catch (netErr) {
+      const e = new Error('通信に失敗しました（オフラインの可能性）'); e.code = 'NETWORK'; throw e;
+    }
+    if (!res.ok) {
+      let msg = `エラー (HTTP ${res.status})`;
+      try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
+      if (res.status === 401) msg = 'APIキーが無効です。設定を確認してください。';
+      const e = new Error(msg); e.code = 'HTTP'; e.status = res.status; throw e;
+    }
+    return res.json();
+  }
+
+  function textOf(data) {
+    const b = (data && data.content || []).find(x => x.type === 'text');
+    return b ? b.text : '';
+  }
+
+  const DECOMP_SYS =
+    'あなたは行動科学に基づく目標達成コーチです。ユーザーの目標を、達成しやすい構造へ分解します。' +
+    '根拠: 目標設定理論(Locke & Latham、具体的で挑戦的)、目標の階層分解(目標→マイルストーン→今週の行動→今日の2分の一歩)、' +
+    '実行意図/if-then(Gollwitzer)、2分ルール(Fogg)。' +
+    '出力は必ず指定のJSONスキーマに厳密に従い、日本語で、具体的かつ実行可能に。' +
+    'today_step は「2分でできる」極小の一歩にし、cue は「Xしたら」の形の実行のきっかけにする。' +
+    '励ましは短く、罪悪感を与えない。';
+
+  const CHAT_SYS =
+    'あなたは行動科学に基づく目標達成コーチです。壁打ち・具体化・つまずきの診断と再起動・振り返りを行います。' +
+    '責めず、共感的に、そして実用的に。つまずいた時はハードルを下げた次の一歩を一緒に見つけます。' +
+    '簡潔に日本語で答え、必要なら具体的な「次の2分の一歩」を提案します。' +
+    'ダークパターン・通知スパム・依存や罪悪感を煽る発言はしません。ユーザーの長期的な幸福を最優先します。';
+
+  return {
+    async decompose({ title, deadline, identity }) {
+      const schema = {
+        type: 'object',
+        properties: {
+          restated_goal: { type: 'string', description: 'より具体的に言い換えた目標' },
+          milestones: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: { title: { type: 'string' }, why: { type: 'string' } },
+              required: ['title', 'why'],
+              additionalProperties: false
+            }
+          },
+          week_actions: { type: 'array', items: { type: 'string' } },
+          today_step: {
+            type: 'object',
+            properties: { title: { type: 'string' }, cue: { type: 'string' } },
+            required: ['title', 'cue'],
+            additionalProperties: false
+          },
+          encouragement: { type: 'string' }
+        },
+        required: ['restated_goal', 'milestones', 'week_actions', 'today_step', 'encouragement'],
+        additionalProperties: false
+      };
+      const user =
+        `目標: ${title}\n期限: ${deadline || '未設定'}\nなりたい自分: ${identity || '未設定'}\n今日: ${today()}\n\n` +
+        'この目標を分解してください。マイルストーンは3〜5個、今週の行動(week_actions)は3個程度、' +
+        'today_step は2分でできる具体的な最初の一歩にしてください。';
+      const data = await call({
+        max_tokens: 2000,
+        system: DECOMP_SYS,
+        messages: [{ role: 'user', content: user }],
+        output_config: { format: { type: 'json_schema', schema } }
+      });
+      const txt = textOf(data);
+      try { return JSON.parse(txt); }
+      catch (e) { const err = new Error('AIの応答を解析できませんでした'); err.code = 'PARSE'; throw err; }
+    },
+
+    async chat(history, context) {
+      const data = await call({
+        max_tokens: 1024,
+        system: CHAT_SYS + '\n\n# ユーザーの現在の状況（参考）\n' + context,
+        messages: history
+      });
+      return textOf(data);
     }
   };
 })();
@@ -1810,6 +1943,8 @@ function Insight() {
 function Settings() {
   const { state, dispatch, addToast } = useApp();
   const fileRef = useRef(null);
+  const [apiKey, setApiKey] = useState(ApiKeyStore.get());
+  const [showKey, setShowKey] = useState(false);
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
@@ -1836,6 +1971,18 @@ function Settings() {
         </div>
         <input type="range" min="0" max="1" step="0.01" value=${state.settings.soundVolume} onInput=${e => { const v = parseFloat(e.currentTarget.value); AudioEngine.setVolume(v); dispatch({type:'SET_SETTINGS', patch:{soundVolume: v}}); }} style="width:100%; accent-color: var(--holo-cyan); margin-bottom: 24px;"/>
         
+        <div class="holo-label mb-2 mt-4">AIコーチ ・ Anthropic APIキー</div>
+        <div class="flex-row mb-2">
+          <input class="glass-input" type=${showKey ? 'text' : 'password'} placeholder="sk-ant-..." value=${apiKey}
+            autocomplete="off" autocapitalize="off" spellcheck="false"
+            onInput=${e => { const v = e.currentTarget.value; setApiKey(v); ApiKeyStore.set(v.trim()); }} />
+          <button class="glass-btn glass-btn--icon" style="width:48px;height:48px;flex-shrink:0;" onClick=${() => setShowKey(s => !s)}><${Icon} n=${showKey ? 'moon' : 'sun'} size=16/></button>
+        </div>
+        ${apiKey ? html`<button class="glass-btn glass-btn--danger glass-btn--block mb-2" onClick=${() => { ApiKeyStore.set(''); setApiKey(''); addToast('APIキーを削除しました', 'info'); }}>キーを削除</button>` : null}
+        <div class="holo-label mb-4" style="text-transform:none; letter-spacing:normal; opacity:0.8; line-height:1.6;">
+          キーは端末内(localStorage)にのみ保存され、AIコーチ利用時にAnthropicへ直接送信されます。バックアップ(書き出し)には含まれません。キーは <span style="color:var(--text-cyan);">console.anthropic.com</span> で取得できます。
+        </div>
+
         <div class="holo-label mb-4">データ管理</div>
         <div class="grid-2">
            <button class="glass-btn glass-btn--block" onClick=${exportData}>書き出し</button>
@@ -1940,10 +2087,198 @@ function Onboarding() {
   `;
 }
 
+// ----- AI COACH (Claude API, BYOK) -----
+// 行動変容の差別化: 目標分解（思考回路/タスクに接続）と、つまずき診断・振り返りの対話。
+function buildCoachContext(state) {
+  const t = today();
+  const todayTasks = state.tasks.filter(x => x.date === t);
+  const done = todayTasks.filter(x => x.done).length;
+  const goals = state.goals.length
+    ? state.goals.map(g => `- ${g.title}（期限 ${g.deadline || '未設定'}）`).join('\n')
+    : '（未設定）';
+  const recent7 = state.timer.sessions
+    .filter(s => dayDiff(dstr(new Date(s.t)), t) <= 7 && dayDiff(dstr(new Date(s.t)), t) >= 0)
+    .reduce((a, s) => a + s.min, 0);
+  return [
+    `なりたい自分: ${state.identity || '未設定'}`,
+    `目標:\n${goals}`,
+    `今日のタスク: ${done}/${todayTasks.length} 完了`,
+    `連続日数(ストリーク): ${state.streak}`,
+    `直近7日の集中: ${recent7} 分`
+  ].join('\n');
+}
+
+function Coach({ go }) {
+  const { state, dispatch, addToast } = useApp();
+  const [mode, setMode] = useState('decompose');
+  const [hasKey, setHasKey] = useState(ApiKeyStore.has());
+
+  // --- 目標分解 ---
+  const [goalTitle, setGoalTitle] = useState('');
+  const [deadline, setDeadline] = useState('');
+  const [plan, setPlan] = useState(null);
+  const [planLoading, setPlanLoading] = useState(false);
+
+  // --- 対話 ---
+  const [chat, setChat] = useState([]); // {role, content}
+  const [input, setInput] = useState('');
+  const [chatLoading, setChatLoading] = useState(false);
+  const logRef = useRef(null);
+
+  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat, chatLoading]);
+
+  const runDecompose = async () => {
+    const title = goalTitle.trim();
+    if (!title) return;
+    setPlan(null); setPlanLoading(true);
+    try {
+      const result = await ClaudeAPI.decompose({ title, deadline, identity: state.identity });
+      setPlan(result);
+    } catch (e) {
+      addToast(e.code === 'NO_KEY' ? 'APIキーを設定してください' : (e.message || 'エラーが発生しました'), 'info');
+      if (e.code === 'NO_KEY') setHasKey(false);
+    } finally { setPlanLoading(false); }
+  };
+
+  const addGoalFromPlan = () => {
+    const title = (plan.restated_goal || goalTitle).trim();
+    if (!title) return;
+    dispatch({ type: 'ADD_GOAL', goal: { id: uid(), title, deadline: deadline || addDays(today(), 30) } });
+    addToast('目標を追加しました', 'success');
+  };
+  const addTodayStep = () => {
+    const tk = { id: uid(), title: plan.today_step.title.trim(), date: today(), done: false };
+    if (plan.today_step.cue) tk.cue = plan.today_step.cue.trim();
+    dispatch({ type: 'ADD_TASK', task: tk });
+    addToast('今日の一歩を追加しました', 'success');
+  };
+  const addWeekActions = () => {
+    (plan.week_actions || []).forEach((a, i) => {
+      dispatch({ type: 'ADD_TASK', task: { id: uid(), title: String(a).trim(), date: addDays(today(), i), done: false } });
+    });
+    addToast('今週の行動をタスクに追加しました', 'success');
+  };
+
+  const send = async (text) => {
+    const content = (text != null ? text : input).trim();
+    if (!content || chatLoading) return;
+    const nextChat = [...chat, { role: 'user', content }];
+    setChat(nextChat); setInput(''); setChatLoading(true);
+    try {
+      const reply = await ClaudeAPI.chat(nextChat, buildCoachContext(state));
+      setChat([...nextChat, { role: 'assistant', content: reply || '（応答が空でした）' }]);
+    } catch (e) {
+      setChat([...nextChat, { role: 'assistant', content: '⚠️ ' + (e.code === 'NO_KEY' ? 'APIキーが未設定です。設定画面で登録してください。' : (e.message || 'エラーが発生しました')) }]);
+      if (e.code === 'NO_KEY') setHasKey(false);
+    } finally { setChatLoading(false); }
+  };
+
+  if (!hasKey) {
+    return html`
+      <div class="app__inner">
+        <div class="glass-panel text-center">
+          <div class="holo-icon mb-4" style="margin:0 auto;"><${Icon} n="message"/></div>
+          <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">AIコーチ</div>
+          <div class="holo-label" style="line-height:1.7; text-transform:none; letter-spacing:normal;">
+            目標の分解・つまずきの相談・振り返りを、行動科学にもとづくAIコーチが手伝います。<br/><br/>
+            利用には Anthropic の APIキーが必要です（あなたのキーで直接通信し、データは端末とAnthropic以外に送信されません）。
+          </div>
+          <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${() => go('settings')}>設定でAPIキーを登録</button>
+        </div>
+      </div>
+    `;
+  }
+
+  return html`
+    <div class="app__inner">
+      <div class="glass-panel glass-panel--sm coach-seg">
+        <button class="glass-btn ${mode === 'decompose' ? 'glass-btn--primary' : ''}" onClick=${() => setMode('decompose')}><${Icon} n="branch" size=16/> 目標を分解</button>
+        <button class="glass-btn ${mode === 'chat' ? 'glass-btn--primary' : ''}" onClick=${() => setMode('chat')}><${Icon} n="message" size=16/> 相談する</button>
+      </div>
+
+      ${mode === 'decompose' ? html`
+        <div class="glass-panel">
+          <div class="holo-label mb-2">分解したい目標</div>
+          <select class="glass-select mb-4" onChange=${e => { const g = state.goals.find(x => x.id === e.currentTarget.value); if (g) { setGoalTitle(g.title); setDeadline(g.deadline || ''); } }}>
+            <option value="">（既存の目標から選ぶ / 下に直接入力）</option>
+            ${state.goals.map(g => html`<option key=${g.id} value=${g.id}>${g.title}</option>`)}
+          </select>
+          <input class="glass-input mb-4" placeholder="例: 半年でTOEIC800点" value=${goalTitle} onInput=${e => setGoalTitle(e.currentTarget.value)} />
+          <div class="holo-label mb-2">期限（任意）</div>
+          <input class="glass-input mb-4" type="date" value=${deadline} onInput=${e => setDeadline(e.currentTarget.value)} />
+          <button class="glass-btn glass-btn--primary glass-btn--block" disabled=${planLoading || !goalTitle.trim()} onClick=${runDecompose}>
+            ${planLoading ? 'AIが分解中…' : 'この目標をAIで分解する'}
+          </button>
+        </div>
+
+        ${plan ? html`
+          <div class="glass-panel">
+            <div class="holo-label mb-2">具体化した目標</div>
+            <div style="font-weight:600; color:var(--text-cyan); text-shadow:var(--text-glow-cyan); margin-bottom:16px;">${plan.restated_goal}</div>
+
+            <div class="holo-label mb-2">マイルストーン</div>
+            <div class="holo-list mb-4">
+              ${(plan.milestones || []).map((m, i) => html`
+                <div class="holo-item" key=${i} style="flex-direction:column; align-items:flex-start; gap:4px;">
+                  <div style="font-weight:600; font-size:0.92rem;">${i + 1}. ${m.title}</div>
+                  ${m.why ? html`<div class="holo-label" style="text-transform:none; letter-spacing:normal;">${m.why}</div>` : null}
+                </div>
+              `)}
+            </div>
+
+            <div class="holo-label mb-2">今週の行動</div>
+            <div class="holo-list mb-4">
+              ${(plan.week_actions || []).map((a, i) => html`<div class="holo-item" key=${i} style="padding:10px 14px;"><div class="holo-item__text" style="font-size:0.9rem;">${a}</div></div>`)}
+            </div>
+
+            <div class="holo-label mb-2">今日の2分の一歩</div>
+            <div class="holo-item mb-4" style="flex-direction:column; align-items:flex-start; gap:4px; border-color:var(--holo-cyan);">
+              <div style="font-weight:600;">${plan.today_step.title}</div>
+              ${plan.today_step.cue ? html`<div class="cue-line"><${Icon} n="branch" size=12/> ${plan.today_step.cue} のとき</div>` : null}
+            </div>
+
+            ${plan.encouragement ? html`<div class="holo-label text-center mb-4" style="text-transform:none; letter-spacing:normal; color:var(--text-cyan);">${plan.encouragement}</div>` : null}
+
+            <div class="holo-label mb-2">アプリに反映</div>
+            <div class="holo-list">
+              <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${addTodayStep}><${Icon} n="plus" size=16/> 今日の一歩をタスクに追加</button>
+              <button class="glass-btn glass-btn--block" onClick=${addGoalFromPlan}><${Icon} n="target" size=16/> この目標を追加</button>
+              <button class="glass-btn glass-btn--block" onClick=${addWeekActions}><${Icon} n="calendar" size=16/> 今週の行動をタスク化</button>
+            </div>
+          </div>
+        ` : null}
+      ` : html`
+        <div class="glass-panel">
+          <div class="chat-log" ref=${logRef}>
+            ${chat.length === 0 ? html`
+              <div class="holo-label text-center" style="padding:16px; text-transform:none; letter-spacing:normal; line-height:1.7;">
+                行動科学にもとづくコーチに相談できます。<br/>下のボタンか、自由に入力してください。
+              </div>
+            ` : chat.map((m, i) => html`<div class="chat-msg ${m.role}" key=${i}>${m.content}</div>`)}
+            ${chatLoading ? html`<div class="chat-msg assistant">…考えています</div>` : null}
+          </div>
+
+          <div class="coach-chips mb-4">
+            <button class="coach-chip" onClick=${() => send('最近サボってしまって、やる気が出ません。どうすればいい？')}>つまずいた</button>
+            <button class="coach-chip" onClick=${() => send('今日の振り返りを手伝って。うまくいった点と次の一歩を整理したい。')}>今日の振り返り</button>
+            <button class="coach-chip" onClick=${() => send('目標に対して、今日まず何から始めればいい？')}>何から始める？</button>
+          </div>
+
+          <div class="flex-row">
+            <input class="glass-input" placeholder="コーチに相談…" value=${input} disabled=${chatLoading} onInput=${e => setInput(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') send(); }} />
+            <button class="glass-btn glass-btn--primary glass-btn--icon" disabled=${chatLoading || !input.trim()} onClick=${() => send()}><${Icon} n="send" size=18/></button>
+          </div>
+        </div>
+        <div class="holo-label text-center" style="text-transform:none; letter-spacing:normal; opacity:0.75;">あなたのAPIキーで直接Anthropicに送信されます。要約された状況のみを共有します。</div>
+      `}
+    </div>
+  `;
+}
+
 /* ============================================================
    App Core
    ============================================================ */
-const VIEWS = { home: Home, calendar: Calendar, maps: CircuitMap, timer: Timer, cards: Cards, goals: Goals, insight: Insight, settings: Settings };
+const VIEWS = { home: Home, calendar: Calendar, maps: CircuitMap, timer: Timer, cards: Cards, goals: Goals, insight: Insight, coach: Coach, settings: Settings };
 const TABS = [
   { id: 'home', icon: 'core' },
   { id: 'calendar', icon: 'calendar' },
@@ -1952,6 +2287,7 @@ const TABS = [
   { id: 'timer', icon: 'timer' },
   { id: 'cards', icon: 'layers' },
   { id: 'insight', icon: 'insight' },
+  { id: 'coach', icon: 'message' },
   { id: 'settings', icon: 'settings' }
 ];
 

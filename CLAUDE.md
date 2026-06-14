@@ -16,8 +16,14 @@
 - 単一ファイル `index.html`（約1,785行）に CSS（`<style>`）と JS（`<script type="module">`）を内包。
 - **UI: Preact 10.19.2 + `preact/hooks` + `htm` 3.1.1**。`<script type="importmap">` 経由で
   **esm.sh の CDN から ESM 直読み込み**（初回オンライン時のみ取得、以降は SW がキャッシュ）。
-- TypeScript なし。Lint/Formatter なし。**テスト一切なし。**
+- TypeScript なし。Lint/Formatter なし。純ロジックの回帰テストは `tests/*.test.mjs`（Nodeのみ）。
 - **バックエンドなし・認証なし。** すべてクライアント完結。
+- **AIコーチ**: Anthropic Claude API を**ブラウザから直接**呼ぶ（SDK不使用、生 `fetch`）。
+  モデル `claude-opus-4-8`、`anthropic-version: 2023-06-01`、CORS用に
+  `anthropic-dangerous-direct-browser-access: true`。目標分解は構造化出力
+  (`output_config.format` の json_schema) で安全にJSONパース。**BYOK**: ユーザーが自分の
+  APIキーを設定（バックエンド無し・静的・プライバシーの設計を維持）。`ClaudeAPI`/`ApiKeyStore`
+  はモジュールレベル。鍵が無い/オフラインでもアプリ本体は壊れない（優雅な劣化）。
 - **状態管理**: `useReducer` + 単一 `reducer`。`localStorage`（キー `goalflow:v22:holo`）に
   500ms デバウンスで永続化。起動時に復元。
 - **PWA**: `manifest.webmanifest`（installable, standalone, portrait, theme `#060B14`）+
@@ -49,15 +55,16 @@
 `Ctx`（Preact Context）が `{ state, dispatch, addToast }` を供給。`App` が
 `useReducer` を保持し、タブで View を切替（フルページ遷移、ルータなし）。
 
-タブ（`TABS` / `VIEWS`）: 8画面
-1. **home** (`Home`) — Goal Core。時計・レベル/XP/ストリーク・今日のタスク・目標カード。
-2. **calendar** (`Calendar`) — 月カレンダー + 月間目標 + サブタスク（回路に同期）+ 日次タスク。
+タブ（`TABS` / `VIEWS`）: 9画面
+1. **home** (`Home`) — Goal Core。時計・なりたい自分・レベル/XP/ストリーク・今日のタスク・目標カード。
+2. **calendar** (`Calendar`) — 月カレンダー + 月間目標 + サブタスク（回路に同期）+ 日次タスク（if-then きっかけ入力）。
 3. **maps** (`CircuitMap`) — 「思考回路」= 目標のツリー(マインドマップ)を自動レイアウト描画。
 4. **goals** (`Goals`) — 戦略目標（タイトル+期限、任意 metric）。
 5. **timer** (`Timer`) — 水位アニメの集中タイマー + Zen 全画面 + 環境音。
 6. **cards** (`Cards`) — フラッシュカード（SM-2 間隔反復、検索/カテゴリ/タグ）。
 7. **insight** (`Insight`) — 解析（累計集中時間・XP・ストリーク・週次バー）。
-8. **settings** (`Settings`) — 音量・JSON エクスポート/インポート・バージョン。
+8. **coach** (`Coach`) — AIコーチ（BYOK）。目標分解（思考回路/タスクに接続）+ つまずき診断/振り返りの対話。
+9. **settings** (`Settings`) — APIキー・identity・音量・JSON エクスポート/インポート・バージョン。
 
 共通: 右上テーマトグル（dark/light）、下部フローティングナビ、トースト。
 
@@ -136,11 +143,17 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
 - `shouldOnboard()` で既存ユーザーにはオンボーディングを出さない。
 - テスト `tests/onboarding.test.mjs`（15件）。
 
-### 残課題（行動科学/体験の核・未着手）
-信頼を損なう残りの注意点:
-- Goals の metric は表示できるが、`metric` を**設定するUIが無い**（常に未設定）。目標と
-  タスク/回路の接続も弱い。
-- まだ AI コーチ無し。次の差別化候補。
+### ✅ フェーズ「差別化 — AIコーチ」で追加
+- AIコーチ（`Coach` タブ）= Claude API(BYOK)。**目標分解**（具体化→マイルストーン→今週の行動
+  →今日の2分の一歩+if-thenきっかけ、構造化出力）を既存のタスク/目標に1タップで反映。
+  **対話コーチ**（つまずき診断・振り返り・壁打ち、状況の要約のみ送信）。
+- Settings に APIキー管理（password入力・表示切替・削除、エクスポートに含めない）。
+- `tests/coach.test.mjs`（9件、`buildCoachContext` の要約/プライバシー）。
+
+### 残課題（次の候補）
+- AIコーチは非ストリーミング（応答までのローディング表示のみ）。体感速度を上げるなら SSE 対応。
+- 用途別モデル使い分け（軽い励まし=高速モデル）は未実装（現状すべて `claude-opus-4-8`）。
+- Goals の metric は表示できるが、`metric` を**設定するUIが無い**（常に未設定）。
 - if-then きっかけは現状 task のみ（月間サブタスク/回路ノードには未対応）。
 - 通知・リマインダー無し（if-then の「きっかけ時刻」を活かす余地）。
 
