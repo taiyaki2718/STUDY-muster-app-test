@@ -8,7 +8,7 @@
 「GoalFlow: Holographic OS」── 目標管理 + 集中タイマー + フラッシュカードを
 ホログラフィックUI（リキッド・グラスモーフィズム）でまとめた、**完全オフライン対応の
 学習計画 PWA**。元リポジトリ名は `STUDY-muster-app-test`（勉強計画アプリ）。
-開発者表記は「たいやき」、アプリ内バージョンは `v1.0.6`。
+開発者表記は「たいやき」、アプリ内バージョンは `v1.1.0`。
 
 ## 2. 技術スタック（コードから確認済み・推測なし）
 
@@ -73,7 +73,7 @@
 ```
 state = {
   settings: { theme:'dark'|'light', soundVolume:0..1, bgmPreset:'rain' },
-  goals:   [{ id, title, deadline, metric?:{done,target} }],
+  goals:   [{ id, title, deadline, metric?:{done,target,unit?} }], // metric は Goals で設定/増減可
   tasks:   [{ id, title, date:'YYYY-MM-DD', done:bool, cue?:string }], // cue = if-then きっかけ
   monthGoals: { [YYYY-MM]: { title, subtasks:[{ id, title, taskId?|nodeId? }] } },
   maps:    [{ id:'map_YYYY-MM', title, rootId:'r', month,
@@ -156,11 +156,22 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
   `tests/coach_stream.test.mjs`（7件、チャンク境界/不正JSON/エラーイベント）。
   ※ 目標分解は構造化出力のため非ストリーミングのまま（全文JSONが必要）。
 
-### 残課題（次の候補）
+### ✅ フェーズ「拡張 — 品質/アクセシビリティ」で追加（v1.1.0）
+- アクセシビリティ: フローティングナビを `<button>`＋`aria-label`＋`aria-current` 化、
+  タスクのチェックを `role`付きボタン(`aria-pressed`)化、主要アイコンボタンに `aria-label`、
+  目標バーに `role="progressbar"`、`:focus-visible` のキーボードフォーカス可視化、
+  `prefers-reduced-motion` で装飾アニメ停止、トーストに `aria-live`。
+- ネイティブ `confirm()/alert()` を**アプリ内モーダル** `ConfirmDialog`（`Ctx` の `confirm()` が
+  `Promise<boolean>` を返す）に置換。Escape/背景クリックでキャンセル、`role="alertdialog"`。
+- **Goals の metric 設定UI を追加**（作りかけ機能の完成）: 目標値・単位・現在値の入力、
+  カードでの進捗バー表示と ±ボタンでの増減（clamp）。`tests/goals_metric.test.mjs`（10件）。
+
+### 残課題（次の候補・未着手）
 - 用途別モデル使い分け（軽い励まし=高速モデル）は未実装（現状すべて `claude-opus-4-8`）。
-- Goals の metric は表示できるが、`metric` を**設定するUIが無い**（常に未設定）。
+  ※claude-api スキルの指針「コスト目的の格下げはしない」に従い意図的に opus 既定のまま。
 - if-then きっかけは現状 task のみ（月間サブタスク/回路ノードには未対応）。
 - 通知・リマインダー無し（if-then の「きっかけ時刻」を活かす余地）。
+- i18n 無し（日本語・`Asia/Tokyo` ハードコード）。文言の外部化は未着手。
 
 体験/行動科学（世界一の核・未着手）:
 - AI 機能ゼロ（コーチング・目標分解・具体化・つまずき診断なし）。
@@ -169,9 +180,11 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
 - 次の推奨: 実行意図(if-then) + 2分ルールの最初の一歩オンボーディング（Top1/Top2 を同時攻略）。
 
 品質/横断:
-- テスト・Lint・型・ビルド無し。全コードが単一 1,785 行ファイル。
-- アクセシビリティ未対応（アイコンのみのナビに aria/label 無し、色のみで状態表現、`<div>` クリック）。
-- i18n 無し（日本語・`Asia/Tokyo` ハードコード）。`confirm()/alert()` ネイティブダイアログ依存。
+- Lint・型・ビルド無し。純ロジックのみ `tests/*.test.mjs`（Nodeのみ）。全コードが単一 HTML。
+- アクセシビリティ: v1.1.0 で大幅改善（ナビ/チェック/アイコンボタンの aria、focus-visible、
+  reduced-motion、progressbar、aria-live）。色のみ依存の状態表現や完全な SR 検証は今後も継続課題。
+- ネイティブ `confirm()/alert()` 依存は解消（`ConfirmDialog`）。
+- i18n 無し（日本語・`Asia/Tokyo` ハードコード）。文言外部化は未着手。
 - Preact を CDN 依存（SW でキャッシュされるが初回はネット必須）。
 
 ## 9. North Star（判断基準）

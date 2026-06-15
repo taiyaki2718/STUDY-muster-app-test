@@ -70,6 +70,18 @@
 
 /* Reset & Mobile Bounce Lock */
 * { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* Accessibility: visible keyboard focus (not shown for mouse/touch). */
+:focus { outline: none; }
+:focus-visible { outline: 2px solid var(--holo-cyan); outline-offset: 2px; border-radius: 6px; }
+
+/* Accessibility: respect reduced-motion — disable decorative animations. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important; scroll-behavior: auto !important;
+  }
+}
 html {
   height: 100%; overflow: hidden;
   background-color: var(--bg-core);
@@ -116,6 +128,7 @@ body {
 .nav__item {
   flex: 0 0 auto; width: 42px; height: 42px; min-width: 42px; border-radius: 50%; display: grid; place-items: center;
   color: var(--text-muted); cursor: pointer; transition: all 0.3s var(--ease); position: relative;
+  appearance: none; -webkit-appearance: none; background: transparent; border: none; font: inherit; padding: 0;
 }
 .nav__item:hover { color: var(--text-main); }
 .nav__item.is-active {
@@ -215,6 +228,7 @@ body {
 [data-theme="light"] .holo-item { background: rgba(255,255,255,0.6); border-color: var(--glass-border); }
 .holo-item.is-done { opacity: 0.5; filter: grayscale(1); }
 .holo-item__text { flex: 1; font-weight: 500; font-size: 0.95rem; }
+.check-btn { appearance: none; -webkit-appearance: none; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; display: flex; flex-shrink: 0; }
 .holo-checkbox { width: 26px; height: 26px; border-radius: 8px; border: 2px solid var(--text-muted); display: grid; place-items: center; color: transparent; transition: 0.2s; cursor: pointer; flex-shrink: 0; }
 .holo-checkbox.is-on { background: var(--holo-cyan); border-color: var(--holo-cyan); color: #fff; box-shadow: var(--glow-cyan); }
 
@@ -443,6 +457,16 @@ body {
 }
 @media(min-width: 640px) { .scrim { justify-content: center; padding: 20px; } .holo-modal { border-radius: 32px; border-bottom: 1px solid var(--glass-border); padding-bottom: 30px; width: 100%; max-width: 500px; margin: 0 auto; } }
 .modal-grip { width: 40px; height: 5px; border-radius: 10px; background: rgba(255,255,255,0.3); margin: 0 auto 20px; }
+
+/* In-app confirm dialog (replaces native confirm()) */
+.scrim--center { justify-content: center; align-items: center; padding: 24px; }
+.confirm-dialog {
+  background: var(--glass-bg); backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%);
+  border: 1px solid var(--glass-border); border-top: 1px solid var(--glass-highlight);
+  border-radius: 24px; padding: 26px 22px; width: 100%; max-width: 380px; box-shadow: var(--glass-shadow); animation: popIn 0.25s var(--ease);
+}
+.confirm-msg { font-size: 1rem; font-weight: 600; line-height: 1.7; margin-bottom: 22px; text-align: center; color: var(--text-main); }
+.confirm-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .toasts { position: fixed; top: env(safe-area-inset-top, 20px); left: 50%; transform: translateX(-50%); z-index: 999; display: flex; flex-direction: column; gap: 10px; pointer-events: none; width: 90%; max-width: 400px;}
 .holo-toast { background: rgba(16, 28, 48, 0.85); color: #fff; padding: 14px 20px; border-radius: 16px; font-weight: 500; font-size: 0.9rem; display: flex; align-items: center; gap: 12px; border: 1px solid var(--holo-cyan); box-shadow: var(--glow-cyan); backdrop-filter: blur(10px); animation: popIn 0.3s var(--ease); }
 
@@ -1058,15 +1082,42 @@ function RadialProgress({ progress, size = 60, stroke = 6 }) {
 }
 
 function Modal({ title, icon, onClose, children }) {
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
   return html`
     <div class="scrim" onClick=${e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div class="holo-modal">
+      <div class="holo-modal" role="dialog" aria-modal="true" aria-label=${title}>
         <div class="modal-grip"></div>
         <div class="module-header">
           <div class="holo-icon-group"><div class="holo-icon"><${Icon} n=${icon}/></div><div class="holo-data" style="font-size: 1.1rem; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${title}</div></div>
-          <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px; flex-shrink:0;" onClick=${onClose}><${Icon} n="x" size=16/></button>
+          <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px; flex-shrink:0;" aria-label="閉じる" onClick=${onClose}><${Icon} n="x" size=16/></button>
         </div>
         ${children}
+      </div>
+    </div>
+  `;
+}
+
+// アプリ内 confirm()。中央配置の小さなダイアログ。Escape/背景クリックでキャンセル。
+function ConfirmDialog({ message, onResolve }) {
+  const okRef = useRef(null);
+  useEffect(() => {
+    if (okRef.current) okRef.current.focus();
+    const onKey = (e) => { if (e.key === 'Escape') onResolve(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  return html`
+    <div class="scrim scrim--center" onClick=${e => { if (e.target === e.currentTarget) onResolve(false); }}>
+      <div class="confirm-dialog" role="alertdialog" aria-modal="true" aria-label="確認">
+        <div class="confirm-msg">${message}</div>
+        <div class="confirm-actions">
+          <button class="glass-btn glass-btn--block" onClick=${() => onResolve(false)}>キャンセル</button>
+          <button class="glass-btn glass-btn--primary glass-btn--block" ref=${okRef} onClick=${() => onResolve(true)}>実行</button>
+        </div>
       </div>
     </div>
   `;
@@ -1132,12 +1183,12 @@ function Home({ go }) {
         <div class="holo-list">
           ${todayTasks.length ? todayTasks.map(tk => html`
             <div class="holo-item ${tk.done ? 'is-done' : ''}" key=${tk.id}>
-              <div onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></div>
+              <button class="check-btn" aria-pressed=${tk.done} aria-label=${tk.done ? 'タスクを未完了に戻す' : 'タスクを完了にする'} onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></button>
               <div class="holo-item__text">
                 ${tk.title}
                 ${tk.cue ? html`<div class="cue-line"><${Icon} n="branch" size=12/> ${tk.cue} のとき</div>` : null}
               </div>
-              <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
+              <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; border:none; flex-shrink:0; margin-right:4px;" aria-label="このタスクで集中を開始" onClick=${() => {
                 dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: tk.id, title: tk.title } });
                 go('timer');
               }}><${Icon} n="timer" size=14/></button>
@@ -1196,9 +1247,9 @@ function Calendar({ go }) {
   return html`
     <div class="app__inner">
       <div class="glass-panel flex-between glass-panel--sm">
-        <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => shift(-1)}><${Icon} n="chevL"/></button>
+        <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" aria-label="前の月へ" onClick=${() => shift(-1)}><${Icon} n="chevL"/></button>
         <div class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${mDate.y} - ${pad(mDate.m + 1)}</div>
-        <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => shift(1)}><${Icon} n="chevR"/></button>
+        <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" aria-label="次の月へ" onClick=${() => shift(1)}><${Icon} n="chevR"/></button>
       </div>
 
       <div class="glass-panel">
@@ -1233,12 +1284,12 @@ function Calendar({ go }) {
             }
             return html`
               <div class="holo-item ${isDone ? 'is-done' : ''}" key=${st.id} style="padding: 10px;">
-                <div onClick=${() => {
+                <button class="check-btn" aria-pressed=${isDone} aria-label=${isDone ? '未完了に戻す' : '完了にする'} onClick=${() => {
                   if (st.nodeId && currentMap) dispatch({ type: 'TOGGLE_MAP_NODE', mapId: currentMap.id, nodeId: st.nodeId });
                   else if (st.taskId) dispatch({ type: 'TOGGLE_TASK', id: st.taskId });
-                }}><${Check} on=${isDone}/></div>
+                }}><${Check} on=${isDone}/></button>
                 <div class="holo-item__text" style="font-size:0.85rem;">${st.title}</div>
-                <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
+                <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; border:none; flex-shrink:0; margin-right:4px;" aria-label="この項目で集中を開始" onClick=${() => {
                   if(st.nodeId && currentMap) {
                     dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'node', id: st.nodeId, mapId: currentMap.id, title: st.title } });
                     go('timer');
@@ -1247,7 +1298,7 @@ function Calendar({ go }) {
                     go('timer');
                   }
                 }}><${Icon} n="timer" size=12/></button>
-                <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; border:none; flex-shrink:0;" onClick=${() => {
+                <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; border:none; flex-shrink:0;" aria-label="この項目の操作" onClick=${() => {
                   if(currentMap) {
                     const nId = st.nodeId || Object.keys(currentMap.nodes).find(k => currentMap.nodes[k].taskId === st.taskId);
                     if(nId) setActionNode(nId);
@@ -1259,7 +1310,7 @@ function Calendar({ go }) {
         </div>
         <div class="flex-row">
           <input class="glass-input" placeholder="追加..." value=${subTxt} onInput=${e => setSubTxt(e.currentTarget.value)} onKeyDown=${e => { if(e.key==='Enter') addSub(); }}/>
-          <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addSub}><${Icon} n="plus"/></button>
+          <button class="glass-btn glass-btn--primary glass-btn--icon" aria-label="追加" onClick=${addSub}><${Icon} n="plus"/></button>
         </div>
       </div>
 
@@ -1269,22 +1320,22 @@ function Calendar({ go }) {
         <div class="holo-list mb-4">
           ${selectedTasks.length ? selectedTasks.map(tk => html`
             <div class="holo-item ${tk.done ? 'is-done' : ''}" key=${tk.id} style="padding: 10px;">
-              <div onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></div>
+              <button class="check-btn" aria-pressed=${tk.done} aria-label=${tk.done ? 'タスクを未完了に戻す' : 'タスクを完了にする'} onClick=${() => dispatch({ type: 'TOGGLE_TASK', id: tk.id })}><${Check} on=${tk.done}/></button>
               <div class="holo-item__text" style="font-size:0.85rem;">
                 ${tk.title}
                 ${tk.cue ? html`<div class="cue-line"><${Icon} n="branch" size=12/> ${tk.cue} のとき</div>` : null}
               </div>
-              <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0; margin-right:4px;" onClick=${() => {
+              <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0; margin-right:4px;" aria-label="このタスクで集中を開始" onClick=${() => {
                 dispatch({ type: 'SET_ACTIVE_TIMER_TARGET', target: { type: 'task', id: tk.id, title: tk.title } });
                 go('timer');
               }}><${Icon} n="timer" size=12/></button>
-              <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0;" onClick=${() => dispatch({ type: 'DELETE_TASK', id: tk.id })}><${Icon} n="trash" size=12/></button>
+              <button class="glass-btn glass-btn--icon" style="width:28px; height:28px; min-width:28px; border:none; flex-shrink:0;" aria-label="タスクを削除" onClick=${() => dispatch({ type: 'DELETE_TASK', id: tk.id })}><${Icon} n="trash" size=12/></button>
             </div>
           `) : html`<div class="holo-label text-center" style="padding:10px;">タスクはありません</div>`}
         </div>
         <div class="flex-row mb-4">
           <input class="glass-input" placeholder="タスクを追加..." value=${taskTxt} onInput=${e => setTaskTxt(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') addTask(); }}/>
-          <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addTask}><${Icon} n="plus"/></button>
+          <button class="glass-btn glass-btn--primary glass-btn--icon" aria-label="タスクを追加" onClick=${addTask}><${Icon} n="plus"/></button>
         </div>
         <input class="glass-input" style="font-size:0.85rem;" placeholder="いつやる？ きっかけ（任意・if-then）: 例 朝食後に" value=${cueTxt} onInput=${e => setCueTxt(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') addTask(); }}/>
       </div>
@@ -1462,7 +1513,7 @@ function ActionModal({ node, map, onClose, go }) {
       <div class="holo-label mb-2">さらに細分化する（孫タスクの追加）</div>
       <div class="flex-row">
         <input class="glass-input" placeholder="サブタスクを入力..." value=${subTxt} onInput=${e => setSubTxt(e.currentTarget.value)} onKeyDown=${e => { if(e.key==='Enter') addSub(); }}/>
-        <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${addSub}><${Icon} n="plus"/></button>
+        <button class="glass-btn glass-btn--primary glass-btn--icon" aria-label="追加" onClick=${addSub}><${Icon} n="plus"/></button>
       </div>
     </${Modal}>
   `;
@@ -1475,7 +1526,7 @@ function ActionModal({ node, map, onClose, go }) {
 let timerKeep = null;
 
 function Timer() {
-  const { state, dispatch, addToast } = useApp();
+  const { state, dispatch, addToast, confirm } = useApp();
   const [dur, setDur] = useState(state.timer.lastDurationMin || 25);
   const [timeLeft, setTimeLeft] = useState(dur * 60);
   const [running, setRunning] = useState(false);
@@ -1548,11 +1599,14 @@ function Timer() {
     setRunning(false); setTimeLeft(0); endRef.current = 0; timerKeep = null; AudioEngine.chime();
     dispatch({ type: 'LOG_SESSION', durationMin: dur });
     addToast('セッション完了', 'success');
-    if(aTarget && !isTargetDone && confirm(`[${targetTitle}] を完了にしますか？`)) {
-      if (aTarget.type === 'task') dispatch({ type: 'TOGGLE_TASK', id: aTarget.id });
-      if (aTarget.type === 'node') dispatch({ type: 'TOGGLE_MAP_NODE', mapId: aTarget.mapId, nodeId: aTarget.id });
+    if (aTarget && !isTargetDone) {
+      confirm(`「${targetTitle}」を完了にしますか？`).then(yes => {
+        if (!yes) return;
+        if (aTarget.type === 'task') dispatch({ type: 'TOGGLE_TASK', id: aTarget.id });
+        if (aTarget.type === 'node') dispatch({ type: 'TOGGLE_MAP_NODE', mapId: aTarget.mapId, nodeId: aTarget.id });
+      });
     }
-  }, [dur, aTarget, isTargetDone, targetTitle, dispatch, addToast]);
+  }, [dur, aTarget, isTargetDone, targetTitle, dispatch, addToast, confirm]);
 
   useEffect(() => {
     if (!running) {
@@ -1635,14 +1689,14 @@ function Timer() {
           <span class="bubble" style="left:74%; width:5px; height:5px; animation-duration:5s; animation-delay:2.3s;"></span>
           <span class="bubble" style="left:33%; width:5px; height:5px; animation-duration:6s; animation-delay:3.1s;"></span>
         </div>
-        <button class="glass-btn glass-btn--icon zen__close" onClick=${toggleZen}><${Icon} n="compress"/></button>
+        <button class="glass-btn glass-btn--icon zen__close" aria-label="全画面を終了" onClick=${toggleZen}><${Icon} n="compress"/></button>
         <div class="zen__center">
           ${aTarget ? html`<div style="color:var(--holo-cyan); font-size:1.2rem; font-weight:600; text-shadow:0 0 10px rgba(0,0,0,0.5); margin-bottom: 20px;">${targetTitle}</div>` : null}
           <div class="timer-display-box">
             <div class="timer-time" ref=${timeTxtRef}>${fmtClock(timeLeft)}</div>
           </div>
           <div class="flex-row mt-4">
-            <button class="holo-btn-start" onClick=${() => setRunning(!running)}>
+            <button class="holo-btn-start" aria-label=${running ? '一時停止' : '開始'} onClick=${() => setRunning(!running)}>
               <${Icon} n=${running ? 'pause' : 'play'} size=32/>
             </button>
           </div>
@@ -1681,11 +1735,11 @@ function Timer() {
       </div>
 
       <div class="flex-row" style="justify-content: center; gap: 24px; margin-bottom: 30px;">
-        <button class="glass-btn glass-btn--icon" onClick=${() => { setRunning(false); setTimeLeft(dur * 60); }}><${Icon} n="x"/></button>
-        <button class="holo-btn-start" onClick=${() => setRunning(!running)}>
+        <button class="glass-btn glass-btn--icon" aria-label="リセット" onClick=${() => { setRunning(false); setTimeLeft(dur * 60); }}><${Icon} n="x"/></button>
+        <button class="holo-btn-start" aria-label=${running ? '一時停止' : '開始'} onClick=${() => setRunning(!running)}>
           <${Icon} n=${running ? 'pause' : 'play'} size=32/>
         </button>
-        <button class="glass-btn glass-btn--icon" onClick=${toggleZen}><${Icon} n="expand"/></button>
+        <button class="glass-btn glass-btn--icon" aria-label="全画面（集中モード）" onClick=${toggleZen}><${Icon} n="expand"/></button>
       </div>
       
       <div class="glass-panel mb-4">
@@ -1833,7 +1887,7 @@ function Cards() {
           <div class="holo-data" style="font-size:2rem; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${dueCards.length}</div>
           <div class="holo-label">今日の学習カード</div>
         </div>
-        <button class="glass-btn glass-btn--primary glass-btn--icon" onClick=${start}><${Icon} n="play"/></button>
+        <button class="glass-btn glass-btn--primary glass-btn--icon" aria-label="今日のカード学習を開始" onClick=${start}><${Icon} n="play"/></button>
       </div>
 
       <div class="glass-panel">
@@ -1881,8 +1935,8 @@ function Cards() {
                 <div style="font-size: 0.85rem; color: var(--text-muted);">A: ${c.back} <br/><span style="font-size: 0.7rem; opacity: 0.8;">(次回学習: ${c.due})</span></div>
               </div>
               <div style="display:flex; flex-direction:column; gap:8px;">
-                <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; min-width:32px; border:none; flex-shrink:0;" onClick=${() => setEditCard(c)}><${Icon} n="edit" size=14/></button>
-                <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; min-width:32px; border:none; flex-shrink:0;" onClick=${() => dispatch({ type: 'DELETE_CARD', id: c.id })}><${Icon} n="trash" size=14/></button>
+                <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; min-width:32px; border:none; flex-shrink:0;" aria-label="カードを編集" onClick=${() => setEditCard(c)}><${Icon} n="edit" size=14/></button>
+                <button class="glass-btn glass-btn--icon" style="width:32px; height:32px; min-width:32px; border:none; flex-shrink:0;" aria-label="カードを削除" onClick=${() => dispatch({ type: 'DELETE_CARD', id: c.id })}><${Icon} n="trash" size=14/></button>
               </div>
             </div>
           `) : html`<div class="holo-label text-center" style="padding: 20px;">カードが見つかりません</div>`}
@@ -1912,18 +1966,26 @@ function Cards() {
 
 // ----- GOALS (Strategic Planning) -----
 function Goals() {
-  const { state, dispatch } = useApp();
+  const { state, dispatch, confirm } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
-  const [f, setF] = useState({ id: '', title: '', deadline: '' });
+  const [f, setF] = useState({ id: '', title: '', deadline: '', metricOn: false, metricTarget: '', metricUnit: '', metricDone: 0 });
 
   const save = () => {
-    if(!f.title.trim()) return;
-    dispatch({ type: f.id ? 'UPDATE_GOAL' : 'ADD_GOAL', goal: { ...f, id: f.id || uid() } });
+    if (!f.title.trim()) return;
+    const goal = { id: f.id || uid(), title: f.title.trim(), deadline: f.deadline };
+    const target = parseInt(f.metricTarget, 10);
+    if (f.metricOn && target > 0) {
+      const done = clamp(parseInt(f.metricDone, 10) || 0, 0, target);
+      goal.metric = { done, target, unit: (f.metricUnit || '').trim() };
+    }
+    dispatch({ type: f.id ? 'UPDATE_GOAL' : 'ADD_GOAL', goal });
     setModalOpen(false);
   };
 
-  const openNew = () => { setF({ id: '', title: '', deadline: addDays(today(), 30) }); setModalOpen(true); };
-  const openEdit = (g) => { setF(g); setModalOpen(true); };
+  const openNew = () => { setF({ id: '', title: '', deadline: addDays(today(), 30), metricOn: false, metricTarget: '', metricUnit: '', metricDone: 0 }); setModalOpen(true); };
+  const openEdit = (g) => { setF({ id: g.id, title: g.title, deadline: g.deadline || '', metricOn: !!g.metric, metricTarget: g.metric ? String(g.metric.target) : '', metricUnit: (g.metric && g.metric.unit) || '', metricDone: g.metric ? g.metric.done : 0 }); setModalOpen(true); };
+  const del = async (g) => { if (await confirm(`目標「${g.title}」を削除しますか？`)) dispatch({ type: 'DELETE_GOAL', id: g.id }); };
+  const adjust = (g, delta) => { if (!g.metric) return; const done = clamp(g.metric.done + delta, 0, g.metric.target); dispatch({ type: 'UPDATE_GOAL', goal: { ...g, metric: { ...g.metric, done } } }); };
 
   return html`
     <div class="app__inner">
@@ -1931,31 +1993,64 @@ function Goals() {
         <${Icon} n="plus"/> 新規目標を設定
       </button>
 
+      ${state.goals.length === 0 ? html`<div class="glass-panel text-center"><div class="holo-label" style="text-transform:none; letter-spacing:normal; line-height:1.7;">まだ目標がありません。<br/>上のボタンか、AIコーチの「目標を分解」から始めましょう。</div></div>` : null}
+
       <div class="holo-list">
-        ${state.goals.map(g => html`
+        ${state.goals.map(g => {
+          const ratio = g.metric && g.metric.target ? clamp(g.metric.done / g.metric.target, 0, 1) : 0;
+          return html`
           <div class="glass-panel" style="padding:20px;" key=${g.id}>
             <div class="flex-between mb-4">
               <div class="holo-data" style="font-size: 1.1rem; line-height: 1.3; color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">${g.title}</div>
               <div class="flex-row">
-                <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => openEdit(g)}><${Icon} n="settings" size=16/></button>
-                <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" onClick=${() => { if(confirm('目標を削除しますか？')) dispatch({ type: 'DELETE_GOAL', id: g.id }); }}><${Icon} n="trash" size=16/></button>
+                <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" aria-label="目標を編集" onClick=${() => openEdit(g)}><${Icon} n="edit" size=16/></button>
+                <button class="glass-btn glass-btn--icon" style="width:36px; height:36px; min-width:36px;" aria-label="目標を削除" onClick=${() => del(g)}><${Icon} n="trash" size=16/></button>
               </div>
             </div>
-            <div class="flex-between">
-              <div class="holo-label">期限: ${g.deadline}</div>
-              ${g.metric ? html`<div class="holo-label">${g.metric.done} / ${g.metric.target}</div>` : null}
-            </div>
-            ${g.metric ? html`<div class="line-bar-wrap mt-4"><div class="line-bar-fill" style="width: ${(g.metric.done / g.metric.target) * 100}%"></div></div>` : null}
+            <div class="holo-label">期限: ${g.deadline || '未設定'}</div>
+            ${g.metric ? html`
+              <div class="flex-row mt-4" style="gap:12px;">
+                <div class="line-bar-wrap" style="flex:1;" role="progressbar" aria-valuemin="0" aria-valuemax=${g.metric.target} aria-valuenow=${g.metric.done} aria-label="進捗">
+                  <div class="line-bar-fill" style="width: ${ratio * 100}%"></div>
+                </div>
+                <div class="holo-label" style="white-space:nowrap; margin:0;">${g.metric.done} / ${g.metric.target} ${g.metric.unit || ''}</div>
+              </div>
+              <div class="flex-row mt-2" style="justify-content:flex-end; gap:8px;">
+                <button class="glass-btn glass-btn--icon" style="width:34px;height:34px;min-width:34px;" aria-label="進捗を1減らす" onClick=${() => adjust(g, -1)}><span style="font-size:1.2rem; line-height:1;">−</span></button>
+                <button class="glass-btn glass-btn--icon" style="width:34px;height:34px;min-width:34px;" aria-label="進捗を1増やす" onClick=${() => adjust(g, 1)}><${Icon} n="plus" size=16/></button>
+              </div>
+            ` : null}
           </div>
-        `)}
+        `;})}
       </div>
 
       ${modalOpen ? html`
         <${Modal} title="目標設定" icon="target" onClose=${() => setModalOpen(false)}>
-          <div class="holo-label mb-4">目標名</div>
-          <input class="glass-input mb-4" value=${f.title} onInput=${e => setF({...f, title: e.currentTarget.value})}/>
-          <div class="holo-label mb-4">期限</div>
-          <input class="glass-input mb-4" type="date" value=${f.deadline} onInput=${e => setF({...f, deadline: e.currentTarget.value})}/>
+          <div class="holo-label mb-2">目標名</div>
+          <input class="glass-input mb-4" value=${f.title} onInput=${e => setF({...f, title: e.currentTarget.value})} aria-label="目標名"/>
+          <div class="holo-label mb-2">期限</div>
+          <input class="glass-input mb-4" type="date" value=${f.deadline} onInput=${e => setF({...f, deadline: e.currentTarget.value})} aria-label="期限"/>
+
+          <label class="flex-row" style="cursor:pointer; gap:12px; margin-bottom:16px;">
+            <button type="button" class="holo-checkbox ${f.metricOn ? 'is-on' : ''}" role="checkbox" aria-checked=${f.metricOn} aria-label="数値で進捗を管理" onClick=${() => setF({...f, metricOn: !f.metricOn})}><${Icon} n="check" size=16/></button>
+            <span class="holo-item__text" style="font-size:0.9rem;">数値で進捗を管理する</span>
+          </label>
+
+          ${f.metricOn ? html`
+            <div class="grid-2 mb-4">
+              <div>
+                <div class="holo-label mb-2">目標値</div>
+                <input class="glass-input" type="number" min="1" placeholder="例: 30" value=${f.metricTarget} onInput=${e => setF({...f, metricTarget: e.currentTarget.value})} aria-label="目標値"/>
+              </div>
+              <div>
+                <div class="holo-label mb-2">単位（任意）</div>
+                <input class="glass-input" placeholder="例: 冊 / 回 / km" value=${f.metricUnit} onInput=${e => setF({...f, metricUnit: e.currentTarget.value})} aria-label="単位"/>
+              </div>
+            </div>
+            <div class="holo-label mb-2">現在の進捗</div>
+            <input class="glass-input mb-4" type="number" min="0" value=${f.metricDone} onInput=${e => setF({...f, metricDone: e.currentTarget.value})} aria-label="現在の進捗"/>
+          ` : null}
+
           <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${save}>保存</button>
         </${Modal}>
       ` : null}
@@ -2054,7 +2149,7 @@ function Settings() {
           <input class="glass-input" type=${showKey ? 'text' : 'password'} placeholder="sk-ant-..." value=${apiKey}
             autocomplete="off" autocapitalize="off" spellcheck="false"
             onInput=${e => { const v = e.currentTarget.value; setApiKey(v); ApiKeyStore.set(v.trim()); }} />
-          <button class="glass-btn glass-btn--icon" style="width:48px;height:48px;flex-shrink:0;" onClick=${() => setShowKey(s => !s)}><${Icon} n=${showKey ? 'moon' : 'sun'} size=16/></button>
+          <button class="glass-btn glass-btn--icon" style="width:48px;height:48px;flex-shrink:0;" aria-label=${showKey ? 'キーを隠す' : 'キーを表示'} onClick=${() => setShowKey(s => !s)}><${Icon} n=${showKey ? 'moon' : 'sun'} size=16/></button>
         </div>
         ${apiKey ? html`<button class="glass-btn glass-btn--danger glass-btn--block mb-2" onClick=${() => { ApiKeyStore.set(''); setApiKey(''); addToast('APIキーを削除しました', 'info'); }}>キーを削除</button>` : null}
         <div class="holo-label mb-4" style="text-transform:none; letter-spacing:normal; opacity:0.8; line-height:1.6;">
@@ -2071,7 +2166,7 @@ function Settings() {
         <div class="holo-label mb-4" style="margin-top: 24px;">アプリ情報</div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">バージョン</span>
-          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.0.6</span>
+          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.1.0</span>
         </div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">開発者</span>
@@ -2362,15 +2457,15 @@ function Coach({ go }) {
    ============================================================ */
 const VIEWS = { home: Home, calendar: Calendar, maps: CircuitMap, timer: Timer, cards: Cards, goals: Goals, insight: Insight, coach: Coach, settings: Settings };
 const TABS = [
-  { id: 'home', icon: 'core' },
-  { id: 'calendar', icon: 'calendar' },
-  { id: 'maps', icon: 'branch' },
-  { id: 'goals', icon: 'target' },
-  { id: 'timer', icon: 'timer' },
-  { id: 'cards', icon: 'layers' },
-  { id: 'insight', icon: 'insight' },
-  { id: 'coach', icon: 'message' },
-  { id: 'settings', icon: 'settings' }
+  { id: 'home', icon: 'core', label: 'ホーム' },
+  { id: 'calendar', icon: 'calendar', label: 'カレンダー' },
+  { id: 'maps', icon: 'branch', label: '思考回路' },
+  { id: 'goals', icon: 'target', label: '目標' },
+  { id: 'timer', icon: 'timer', label: '集中タイマー' },
+  { id: 'cards', icon: 'layers', label: 'フラッシュカード' },
+  { id: 'insight', icon: 'insight', label: '解析' },
+  { id: 'coach', icon: 'message', label: 'AIコーチ' },
+  { id: 'settings', icon: 'settings', label: '設定' }
 ];
 
 function App() {
@@ -2383,12 +2478,18 @@ function App() {
   });
   const [tab, setTab] = useState('home');
   const [toasts, setToasts] = useState([]);
-  
+  const [confirmReq, setConfirmReq] = useState(null); // { message, resolve }
+
   const addToast = useCallback((text, kind = 'info') => {
     const id = uid();
     setToasts(ts => [...ts.slice(-2), { id, text, kind }]);
     setTimeout(() => setToasts(ts => ts.filter(x => x.id !== id)), 3000);
   }, []);
+
+  // confirm()/alert() の代わりにアプリ内（ホログラフィック）モーダルで確認する。
+  // Promise<boolean> を返すので await できる。
+  const confirm = useCallback((message) => new Promise(resolve => setConfirmReq({ message, resolve })), []);
+  const resolveConfirm = (val) => { setConfirmReq(req => { if (req) req.resolve(val); return null; }); };
 
   useEffect(() => {
     const s = setTimeout(() => { localStorage.setItem(STORE_KEY, JSON.stringify(state)); }, 500);
@@ -2406,29 +2507,33 @@ function App() {
 
   const onboarding = shouldOnboard(state);
 
+  const currentLabel = (TABS.find(t => t.id === tab) || {}).label || '';
+
   return html`
-    <${Ctx.Provider} value=${{ state, dispatch, addToast }}>
+    <${Ctx.Provider} value=${{ state, dispatch, addToast, confirm }}>
 
       ${onboarding ? html`<${Onboarding} />` : null}
 
       <!-- Theme Toggle (Top Right) -->
-      <button class="theme-toggle" onClick=${toggleTheme}>
+      <button class="theme-toggle" onClick=${toggleTheme} aria-label=${state.settings.theme === 'dark' ? 'ライトモードに切り替え' : 'ダークモードに切り替え'}>
         <${Icon} n=${state.settings.theme === 'dark' ? 'sun' : 'moon'}/>
       </button>
 
-      <main class="app__main">
+      <main class="app__main" id="main" aria-label=${currentLabel}>
         <${View} go=${setTab}/>
       </main>
 
-      <nav class="nav">
+      <nav class="nav" aria-label="メインナビゲーション">
         ${TABS.map(t => html`
-          <div class="nav__item ${tab === t.id ? 'is-active' : ''}" key=${t.id} onClick=${() => { setTab(t.id); document.querySelector('.app__main').scrollTo(0,0); }}>
+          <button class="nav__item ${tab === t.id ? 'is-active' : ''}" key=${t.id} aria-label=${t.label} aria-current=${tab === t.id ? 'page' : null} onClick=${() => { setTab(t.id); const m = document.querySelector('.app__main'); if (m) m.scrollTo(0, 0); }}>
             <${Icon} n=${t.icon}/>
-          </div>
+          </button>
         `)}
       </nav>
 
-      <div class="toasts">
+      ${confirmReq ? html`<${ConfirmDialog} message=${confirmReq.message} onResolve=${resolveConfirm}/>` : null}
+
+      <div class="toasts" aria-live="polite" role="status">
         ${toasts.map(t => html`<div class="holo-toast" key=${t.id}><${Icon} n="zap"/> ${t.text}</div>`)}
       </div>
     </${Ctx.Provider}>
