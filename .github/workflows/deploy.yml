@@ -4,8 +4,9 @@ name: Deploy demo to GitHub Pages
 # enablement: true により、リポジトリ設定で Pages を手動で有効化しなくても初回から動く。
 
 on:
-  push:
-    branches: [ "claude/new-session-27ceqj" ]
+  # 自動デプロイは GitHub Pages の "Deploy from a branch" 設定で行うため、
+  # このワークフローは手動実行(workflow_dispatch)のみにして、push のたびに
+  # 失敗ログが出るのを防ぐ。（Pages の Source を "GitHub Actions" にした場合のみ有効）
   workflow_dispatch:
 
 permissions:
