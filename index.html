@@ -2031,10 +2031,10 @@ function Goals() {
           <div class="holo-label mb-2">期限</div>
           <input class="glass-input mb-4" type="date" value=${f.deadline} onInput=${e => setF({...f, deadline: e.currentTarget.value})} aria-label="期限"/>
 
-          <label class="flex-row" style="cursor:pointer; gap:12px; margin-bottom:16px;">
-            <button type="button" class="holo-checkbox ${f.metricOn ? 'is-on' : ''}" role="checkbox" aria-checked=${f.metricOn} aria-label="数値で進捗を管理" onClick=${() => setF({...f, metricOn: !f.metricOn})}><${Icon} n="check" size=16/></button>
+          <button type="button" class="check-btn flex-row" role="checkbox" aria-checked=${f.metricOn} style="gap:12px; margin-bottom:16px; width:100%; text-align:left;" onClick=${() => setF({...f, metricOn: !f.metricOn})}>
+            <span class="holo-checkbox ${f.metricOn ? 'is-on' : ''}"><${Icon} n="check" size=16/></span>
             <span class="holo-item__text" style="font-size:0.9rem;">数値で進捗を管理する</span>
-          </label>
+          </button>
 
           ${f.metricOn ? html`
             <div class="grid-2 mb-4">
