@@ -8,7 +8,7 @@
 「GoalFlow: Holographic OS」── 目標管理 + 集中タイマー + フラッシュカードを
 ホログラフィックUI（リキッド・グラスモーフィズム）でまとめた、**完全オフライン対応の
 学習計画 PWA**。元リポジトリ名は `STUDY-muster-app-test`（勉強計画アプリ）。
-開発者表記は「たいやき」、アプリ内バージョンは `v1.1.0`。
+開発者表記は「たいやき」、アプリ内バージョンは `v1.2.0`。
 
 ## 2. 技術スタック（コードから確認済み・推測なし）
 
@@ -87,10 +87,11 @@ state = {
 }
 ```
 
-reducer アクション: `TOGGLE_TASK / ADD_TASK / DELETE_TASK / ADD_GOAL / UPDATE_GOAL /
+reducer アクション: `TOGGLE_TASK / ADD_TASK / ADD_TASKS / DELETE_TASK / ADD_GOAL / UPDATE_GOAL /
 DELETE_GOAL / SET_MONTH_GOAL / ADD_MONTH_SUBTASK / UPDATE_MAP / TOGGLE_MAP_NODE /
 ADD_CARD / UPDATE_CARD / DELETE_CARD / REVIEW_CARD / LOG_SESSION /
-SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
+SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / SET_IDENTITY / COMPLETE_ONBOARDING / IMPORT`。
+（`ADD_TASKS` はオートプランの一括追加。`planGoal` がタスク配列を生成して投入する。）
 
 要点:
 - **XP/レベル**: `LOG_SESSION` で `xp += min*10`、`level = floor(sqrt(xp/100))+1`。カード復習で `xp+=5`。
@@ -155,6 +156,17 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / IMPORT`。
   自前パース）。吹き出しが逐次埋まり、待機中はタイピングインジケータ表示。
   `tests/coach_stream.test.mjs`（7件、チャンク境界/不正JSON/エラーイベント）。
   ※ 目標分解は構造化出力のため非ストリーミングのまま（全文JSONが必要）。
+
+### ✅ フェーズ「オートプラン — キー不要の自動カレンダー割り当て」で追加（v1.2.0）
+- **APIキー不要**の決定論的スケジューラ `planGoal`/`planTaskDates`：目標＋期限＋頻度
+  （毎日/平日/週3/週1）＋任意の「1回の内容」から、今日〜期限のタスクを**カレンダーへ自動配置**。
+  最初は今日の「2分の一歩」＋if-thenきっかけ、最後は総仕上げ。`tests/autoplan.test.mjs`（12件）。
+- `AutoPlanModal`（プレビュー件数表示）。Goals の最上部に「目標からカレンダーに自動で割り振る」、
+  各目標カードに「カレンダーに割り振る」、Coach のキー未設定画面でも先頭に提示（**キー入力を強制しない**）。
+- 反復追加用の reducer `ADD_TASKS`。
+- AIコーチ（BYOK）の目標分解結果からも「カレンダーに自動で割り振る」へ接続（任意）。
+- 設計判断: バックエンド無し・静的の制約上、キーを隠す方法が無いため、**中核の自動計画は
+  ローカルで完結**させ、Claude API は「より賢い分解／対話」の任意拡張に留めた。
 
 ### ✅ フェーズ「拡張 — 品質/アクセシビリティ」で追加（v1.1.0）
 - アクセシビリティ: フローティングナビを `<button>`＋`aria-label`＋`aria-current` 化、

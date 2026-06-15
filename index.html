@@ -932,6 +932,53 @@ function reconcileStreak(state) {
   return state;
 }
 
+/* ------------------------------------------------------------
+   オートプラン: 目標と期限から「今日〜期限」のタスクをカレンダーへ自動配置する。
+   APIキー不要・無料・オフラインで動く決定論的スケジューラ。
+   行動科学: 最初は今日の「2分の一歩」(Fogg)＋if-thenきっかけ(Gollwitzer)、
+   最後は総仕上げ。頻度は毎日/平日/週3/週1から選べる。
+   ------------------------------------------------------------ */
+const CADENCE = {
+  daily:    { label: '毎日',           keep: () => true },
+  weekdays: { label: '平日（月〜金）',   keep: (dow) => dow >= 1 && dow <= 5 },
+  mwf:      { label: '週3回（月・水・金）', keep: (dow) => dow === 1 || dow === 3 || dow === 5 },
+  weekly:   { label: '週1回（月曜）',    keep: (dow) => dow === 1 }
+};
+
+function planTaskDates(startDS, endDS, cadence) {
+  const keep = (CADENCE[cadence] || CADENCE.daily).keep;
+  const out = [];
+  let d = startDS, guard = 0;
+  while (dayDiff(d, endDS) >= 0 && guard < 800) {
+    const dow = new Date(d + 'T00:00:00').getDay();
+    if (keep(dow)) out.push(d);
+    d = addDays(d, 1); guard++;
+  }
+  return out;
+}
+
+function planGoal({ title, deadline, cadence = 'daily', perSession = '', today: t }) {
+  t = t || today();
+  const safeTitle = (title || '目標').trim() || '目標';
+  let dl = deadline;
+  if (!dl || dayDiff(t, dl) < 0) dl = addDays(t, 30); // 期限が無い/過去なら30日後を仮定
+  const dates = planTaskDates(t, dl, cadence);
+  if (dates[0] !== t) dates.unshift(t); // 今日を必ず最初の一歩にする（即着手）
+  const n = dates.length;
+  const per = (perSession || '').trim();
+  const tasks = dates.map((date, i) => {
+    const task = { id: uid(), title: per || `${safeTitle}に取り組む`, date, done: false };
+    if (i === 0) {
+      task.title = `🌱 まず2分：${per || safeTitle + 'を始める'}`;
+      task.cue = '朝の支度が終わったら';
+    } else if (i === n - 1 && n > 1) {
+      task.title = `🏁 総仕上げ・達成チェック：${safeTitle}`;
+    }
+    return task;
+  });
+  return { tasks, count: n, first: dates[0], last: dates[n - 1], deadline: dl, cadenceLabel: (CADENCE[cadence] || CADENCE.daily).label };
+}
+
 function reducer(state, a) {
   switch (a.type) {
     case 'TOGGLE_TASK': {
@@ -942,6 +989,8 @@ function reducer(state, a) {
     }
     case 'ADD_TASK':
       return { ...state, tasks: [...state.tasks, a.task] };
+    case 'ADD_TASKS':
+      return { ...state, tasks: [...state.tasks, ...(a.tasks || [])] };
     case 'DELETE_TASK':
       return { ...state, tasks: state.tasks.filter(tk => tk.id !== a.id) };
     
@@ -1967,9 +2016,10 @@ function Cards() {
 }
 
 // ----- GOALS (Strategic Planning) -----
-function Goals() {
+function Goals({ go }) {
   const { state, dispatch, confirm } = useApp();
   const [modalOpen, setModalOpen] = useState(false);
+  const [autoPlan, setAutoPlan] = useState(null); // null | { title, deadline, goalId }
   const [f, setF] = useState({ id: '', title: '', deadline: '', metricOn: false, metricTarget: '', metricUnit: '', metricDone: 0 });
 
   const save = () => {
@@ -1991,8 +2041,11 @@ function Goals() {
 
   return html`
     <div class="app__inner">
-      <button class="glass-btn glass-btn--primary glass-btn--block mb-4" onClick=${openNew}>
-        <${Icon} n="plus"/> 新規目標を設定
+      <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${() => setAutoPlan({})}>
+        <${Icon} n="calendar"/> 目標からカレンダーに自動で割り振る
+      </button>
+      <button class="glass-btn glass-btn--block mb-4" onClick=${openNew}>
+        <${Icon} n="plus"/> 目標だけを追加（手動）
       </button>
 
       ${state.goals.length === 0 ? html`<div class="glass-panel text-center"><div class="holo-label" style="text-transform:none; letter-spacing:normal; line-height:1.7;">まだ目標がありません。<br/>上のボタンか、AIコーチの「目標を分解」から始めましょう。</div></div>` : null}
@@ -2022,9 +2075,14 @@ function Goals() {
                 <button class="glass-btn glass-btn--icon" style="width:34px;height:34px;min-width:34px;" aria-label="進捗を1増やす" onClick=${() => adjust(g, 1)}><${Icon} n="plus" size=16/></button>
               </div>
             ` : null}
+            <button class="glass-btn glass-btn--block mt-4" onClick=${() => setAutoPlan({ title: g.title, deadline: g.deadline, goalId: g.id })}>
+              <${Icon} n="calendar" size=16/> カレンダーに割り振る
+            </button>
           </div>
         `;})}
       </div>
+
+      ${autoPlan ? html`<${AutoPlanModal} initial=${autoPlan} onClose=${() => setAutoPlan(null)} go=${go}/>` : null}
 
       ${modalOpen ? html`
         <${Modal} title="目標設定" icon="target" onClose=${() => setModalOpen(false)}>
@@ -2168,7 +2226,7 @@ function Settings() {
         <div class="holo-label mb-4" style="margin-top: 24px;">アプリ情報</div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">バージョン</span>
-          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.1.0</span>
+          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.2.0</span>
         </div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">開発者</span>
@@ -2262,6 +2320,64 @@ function Onboarding() {
   `;
 }
 
+// ----- AUTO-PLAN (keyless): goal + deadline -> tasks auto-placed on the calendar -----
+function AutoPlanModal({ initial, onClose, go }) {
+  const { dispatch, addToast } = useApp();
+  const [title, setTitle] = useState((initial && initial.title) || '');
+  const [deadline, setDeadline] = useState((initial && initial.deadline) || addDays(today(), 30));
+  const [cadence, setCadence] = useState('daily');
+  const [perSession, setPerSession] = useState('');
+  const goalId = initial && initial.goalId;
+
+  const preview = useMemo(() => title.trim() ? planGoal({ title, deadline, cadence, perSession }) : null, [title, deadline, cadence, perSession]);
+
+  const apply = () => {
+    if (!title.trim()) return;
+    const plan = planGoal({ title, deadline, cadence, perSession });
+    if (!goalId) dispatch({ type: 'ADD_GOAL', goal: { id: uid(), title: title.trim(), deadline: plan.deadline } });
+    dispatch({ type: 'ADD_TASKS', tasks: plan.tasks });
+    addToast(`${plan.count}件のタスクをカレンダーに配置しました`, 'success');
+    onClose();
+    if (go) go('calendar');
+  };
+
+  return html`
+    <${Modal} title="カレンダーに自動で割り振る" icon="calendar" onClose=${onClose}>
+      <div class="holo-label" style="text-transform:none; letter-spacing:normal; line-height:1.6; margin-bottom:16px;">
+        目標と期限を入れるだけで、今日から期限まで「やるべき事」をカレンダーへ自動配置します。<b>APIキーは不要</b>です。
+      </div>
+      <div class="holo-label mb-2">目標</div>
+      <input class="glass-input mb-4" placeholder="例: 半年でTOEIC800点" value=${title} onInput=${e => setTitle(e.currentTarget.value)} aria-label="目標"/>
+      <div class="holo-label mb-2">期限</div>
+      <input class="glass-input mb-4" type="date" value=${deadline} onInput=${e => setDeadline(e.currentTarget.value)} aria-label="期限"/>
+      <div class="grid-2 mb-4">
+        <div>
+          <div class="holo-label mb-2">頻度</div>
+          <select class="glass-select" value=${cadence} onChange=${e => setCadence(e.currentTarget.value)} aria-label="頻度">
+            <option value="daily">毎日</option>
+            <option value="weekdays">平日（月〜金）</option>
+            <option value="mwf">週3回（月・水・金）</option>
+            <option value="weekly">週1回（月曜）</option>
+          </select>
+        </div>
+        <div>
+          <div class="holo-label mb-2">1回の内容（任意）</div>
+          <input class="glass-input" placeholder="例: 単語を10個" value=${perSession} onInput=${e => setPerSession(e.currentTarget.value)} aria-label="1回の内容"/>
+        </div>
+      </div>
+
+      ${preview ? html`
+        <div class="holo-item mb-4" style="flex-direction:column; align-items:flex-start; gap:6px; border-color: var(--holo-cyan);">
+          <div style="font-weight:600;">${preview.count} 件のタスクを配置します</div>
+          <div class="holo-label" style="text-transform:none; letter-spacing:normal;">${preview.first} 〜 ${preview.last}（${preview.cadenceLabel}）／ 最初は今日の「2分の一歩」から</div>
+        </div>
+      ` : html`<div class="holo-label text-center mb-4" style="text-transform:none; letter-spacing:normal;">目標を入力するとプレビューが出ます</div>`}
+
+      <button class="glass-btn glass-btn--primary glass-btn--block" disabled=${!title.trim()} onClick=${apply}><${Icon} n="calendar" size=16/> カレンダーに割り振る</button>
+    </${Modal}>
+  `;
+}
+
 // ----- AI COACH (Claude API, BYOK) -----
 // 行動変容の差別化: 目標分解（思考回路/タスクに接続）と、つまずき診断・振り返りの対話。
 function buildCoachContext(state) {
@@ -2287,6 +2403,7 @@ function Coach({ go }) {
   const { state, dispatch, addToast } = useApp();
   const [mode, setMode] = useState('decompose');
   const [hasKey, setHasKey] = useState(ApiKeyStore.has());
+  const [autoPlan, setAutoPlan] = useState(null);
 
   // --- 目標分解 ---
   const [goalTitle, setGoalTitle] = useState('');
@@ -2357,14 +2474,24 @@ function Coach({ go }) {
     return html`
       <div class="app__inner">
         <div class="glass-panel text-center">
-          <div class="holo-icon mb-4" style="margin:0 auto;"><${Icon} n="message"/></div>
-          <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">AIコーチ</div>
-          <div class="holo-label" style="line-height:1.7; text-transform:none; letter-spacing:normal;">
-            目標の分解・つまずきの相談・振り返りを、行動科学にもとづくAIコーチが手伝います。<br/><br/>
-            利用には Anthropic の APIキーが必要です（あなたのキーで直接通信し、データは端末とAnthropic以外に送信されません）。
+          <div class="holo-icon mb-4" style="margin:0 auto;"><${Icon} n="calendar"/></div>
+          <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">目標を自動で計画する</div>
+          <div class="holo-label" style="line-height:1.7; text-transform:none; letter-spacing:normal; margin-bottom:8px;">
+            目標と期限を入れるだけで、達成までの「やるべき事」をカレンダーへ自動で割り振ります。<b>APIキーは不要</b>です。
           </div>
-          <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${() => go('settings')}>設定でAPIキーを登録</button>
+          <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${() => setAutoPlan({})}>
+            <${Icon} n="calendar" size=16/> 目標からカレンダーに自動で割り振る
+          </button>
         </div>
+
+        <div class="glass-panel text-center">
+          <div class="holo-label" style="line-height:1.7; text-transform:none; letter-spacing:normal;">
+            さらにパーソナルな分解や、つまずき相談・振り返りを使いたい場合は、AIコーチ（Anthropicの自分のAPIキー）を登録できます。<b>任意</b>です。
+          </div>
+          <button class="glass-btn glass-btn--block mt-4" onClick=${() => go('settings')}>AIコーチ用のAPIキーを登録（任意）</button>
+        </div>
+
+        ${autoPlan ? html`<${AutoPlanModal} initial=${autoPlan} onClose=${() => setAutoPlan(null)} go=${go}/>` : null}
       </div>
     `;
   }
@@ -2421,7 +2548,8 @@ function Coach({ go }) {
 
             <div class="holo-label mb-2">アプリに反映</div>
             <div class="holo-list">
-              <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${addTodayStep}><${Icon} n="plus" size=16/> 今日の一歩をタスクに追加</button>
+              <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${() => setAutoPlan({ title: plan.restated_goal || goalTitle, deadline })}><${Icon} n="calendar" size=16/> この目標をカレンダーに自動で割り振る</button>
+              <button class="glass-btn glass-btn--block" onClick=${addTodayStep}><${Icon} n="plus" size=16/> 今日の一歩だけ追加</button>
               <button class="glass-btn glass-btn--block" onClick=${addGoalFromPlan}><${Icon} n="target" size=16/> この目標を追加</button>
               <button class="glass-btn glass-btn--block" onClick=${addWeekActions}><${Icon} n="calendar" size=16/> 今週の行動をタスク化</button>
             </div>
@@ -2450,6 +2578,8 @@ function Coach({ go }) {
         </div>
         <div class="holo-label text-center" style="text-transform:none; letter-spacing:normal; opacity:0.75;">あなたのAPIキーで直接Anthropicに送信されます。要約された状況のみを共有します。</div>
       `}
+
+      ${autoPlan ? html`<${AutoPlanModal} initial=${autoPlan} onClose=${() => setAutoPlan(null)} go=${go}/>` : null}
     </div>
   `;
 }
