@@ -459,7 +459,9 @@ body {
 .modal-grip { width: 40px; height: 5px; border-radius: 10px; background: rgba(255,255,255,0.3); margin: 0 auto 20px; }
 
 /* In-app confirm dialog (replaces native confirm()) */
-.scrim--center { justify-content: center; align-items: center; padding: 24px; }
+/* z-index 500: must sit above the Zen fullscreen layer (z 300) so the
+   timer-completion confirm is visible/operable when a session ends in Zen. */
+.scrim--center { z-index: 500; justify-content: center; align-items: center; padding: 24px; }
 .confirm-dialog {
   background: var(--glass-bg); backdrop-filter: blur(30px) saturate(150%); -webkit-backdrop-filter: blur(30px) saturate(150%);
   border: 1px solid var(--glass-border); border-top: 1px solid var(--glass-highlight);
