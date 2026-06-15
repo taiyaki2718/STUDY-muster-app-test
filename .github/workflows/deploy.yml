@@ -1,0 +1,50 @@
+name: Deploy demo to GitHub Pages
+
+# プッシュするたびに、静的アプリ(index.html ほか)を GitHub Pages へ自動公開する。
+# enablement: true により、リポジトリ設定で Pages を手動で有効化しなくても初回から動く。
+
+on:
+  push:
+    branches: [ "claude/new-session-27ceqj" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure Pages (auto-enable if needed)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      # 配布に必要なファイルだけを _site に集める（.git やテスト等は公開しない）。
+      - name: Stage site files
+        run: |
+          mkdir -p _site
+          cp index.html sw.js manifest.webmanifest _site/
+          cp -r icons _site/
+          cp ./*.mp3 _site/
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: '_site'
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
