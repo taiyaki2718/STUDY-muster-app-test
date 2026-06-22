@@ -9,6 +9,11 @@
   <meta name="apple-mobile-web-app-title" content="MUSCLE FORGE" />
   <title>MUSCLE FORGE — 筋トレ最強アプリ</title>
 
+  <!-- PWA -->
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
+  <link rel="icon" type="image/png" href="icon-192.png" />
+
   <!-- Tailwind CDN -->
   <script src="https://cdn.tailwindcss.com"></script>
   <!-- React + Babel standalone -->
@@ -98,8 +103,9 @@
     /* ============================================================
        VERSION / STORAGE
     ============================================================ */
-    const APP_VERSION = "1.0.0";
+    const APP_VERSION = "1.1.0";
     const STORAGE_KEY = "muscleForge_v1";
+    const WATER_GOAL = 8; // cups/day
 
     /* ============================================================
        MUSCLE DEFINITIONS
@@ -389,6 +395,40 @@
       return map;
     };
 
+    /* Smart workout suggestion:
+       Picks the split day with the greatest combined need (volume deficit vs MAV,
+       weighted by muscle recovery), then recommends one exercise per under-trained
+       muscle (compound preferred). Pure heuristic — fully on-device. */
+    function suggestWorkout(state) {
+      const vol = weeklyVolumeByMuscle(state.logs);
+      const last = lastTrainedByMuscle(state.logs);
+      const split = SPLITS.find(s => s.key === state.settings.split) || SPLITS[0];
+      const scored = split.days.map(day => {
+        let score = 0;
+        const details = day.muscles.map(m => {
+          const def = MUSCLES[m];
+          const sets = vol[m] || 0;
+          const deficit = Math.max(0, def.mav - sets);
+          const ago = last[m] ? daysBetween(last[m], todayStr()) : null;
+          const recovered = ago === null || ago >= 2;
+          score += deficit * (recovered ? 1 : 0.3);
+          return { muscle: m, sets, target: def.mav, ago, recovered, deficit };
+        });
+        return { day, score, details };
+      }).sort((a, b) => b.score - a.score);
+
+      const best = scored[0];
+      const picks = best.details
+        .filter(d => d.sets < MUSCLES[d.muscle].mrv)
+        .sort((a, b) => b.deficit - a.deficit)
+        .map(d => {
+          const list = EXERCISE_DB.filter(e => e.muscle === d.muscle);
+          const exercise = list.find(e => e.type === "compound") || list[0];
+          return { ...d, exercise };
+        });
+      return { day: best.day, picks };
+    }
+
     // Gamification: XP from total sets+volume; level thresholds quadratic
     const xpFromLogs = (logs) => {
       let xp = 0;
@@ -450,6 +490,7 @@
         { date: dShift(0),   weight: 70.0 },
       ],
       todayMenu: [],
+      intakeLog: {}, // { "YYYY-MM-DD": { water, kcal, protein } }
       gamification: { xp: 0, level: 0, current: 0, bestStreak: 0, badges: [] },
       bests: {}, // exerciseId -> best estimated 1RM
     });
@@ -474,6 +515,7 @@
           logs: Array.isArray(parsed.logs) ? parsed.logs : base.logs,
           bodyWeightLog: Array.isArray(parsed.bodyWeightLog) ? parsed.bodyWeightLog : base.bodyWeightLog,
           todayMenu: Array.isArray(parsed.todayMenu) ? parsed.todayMenu : [],
+          intakeLog: (parsed.intakeLog && typeof parsed.intakeLog === "object") ? parsed.intakeLog : {},
           bests: parsed.bests || {},
         };
         return recompute(merged);
@@ -800,6 +842,12 @@
             <Badge>{equipLabel(e.equipment)}</Badge>
             <Badge tone="warn">{levelLabel(e.level)}</Badge>
           </div>
+          <a className="btn w-full py-3 mb-3 flex items-center justify-center gap-2"
+            style={{ background: "rgba(255,46,136,.14)", color: "var(--accent-3)" }}
+            href={`https://www.youtube.com/results?search_query=${encodeURIComponent(e.nameJa + " " + e.nameEn + " フォーム")}`}
+            target="_blank" rel="noopener noreferrer">
+            ▶ フォーム動画を見る
+          </a>
           <Section title="主働筋・協働筋">
             <p className="text-sm"><b>主働筋:</b> {e.primary}</p>
             <p className="text-sm"><b>協働筋:</b> {e.secondary}</p>
@@ -956,9 +1004,57 @@
       const removeMenu = (id) => setState(s => ({ ...s, todayMenu: s.todayMenu.filter(x => x !== id) }));
       const recentLogs = [...state.logs].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 20);
 
+      const [suggestion, setSuggestion] = useState(null);
+      const makeSuggestion = () => setSuggestion(suggestWorkout(state));
+      const addAllSuggested = () => {
+        const ids = suggestion.picks.map(p => p.exercise.id);
+        setState(s => ({ ...s, todayMenu: [...new Set([...s.todayMenu, ...ids])] }));
+      };
+
       return (
         <div className="p-4 pb-28 fade-in">
           <Header title="記録" sub="今日のメニューとセット記録" state={state} />
+
+          {/* Smart menu suggestion */}
+          <div className="card p-4 mb-4" style={{ borderColor: "var(--accent-2)" }}>
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-extrabold flex items-center gap-1">🤖 スマートメニュー提案</h3>
+              <button className="btn btn-primary px-3 py-1.5 text-xs" onClick={makeSuggestion}>
+                {suggestion ? "再提案" : "提案する"}
+              </button>
+            </div>
+            <p className="text-[11px] mb-2" style={{ color: "var(--text-faint)" }}>
+              回復状況と週間ボリューム不足から最適な部位を自動選定
+            </p>
+            {suggestion && (
+              <div className="slide-up">
+                <div className="rounded-xl p-3 mb-2" style={{ background: "var(--surface-2)" }}>
+                  <div className="text-sm font-bold mb-1" style={{ color: "var(--accent)" }}>
+                    おすすめ: {suggestion.day.name}
+                  </div>
+                  {suggestion.picks.length === 0
+                    ? <p className="text-xs" style={{ color: "var(--text-faint)" }}>全部位が十分なボリュームに達しています。休養もトレーニングのうちです 💪</p>
+                    : (
+                      <div className="space-y-1.5">
+                        {suggestion.picks.map(p => (
+                          <div key={p.muscle} className="flex items-center justify-between">
+                            <div>
+                              <span className="text-sm font-bold">{p.exercise.nameJa}</span>
+                              <span className="text-[11px] ml-1" style={{ color: "var(--text-faint)" }}>（{MUSCLES[p.muscle].ja}）</span>
+                            </div>
+                            <span className="text-[11px]" style={{ color: p.recovered ? "var(--good)" : "var(--warn)" }}>
+                              {p.sets}/{p.target}セット・{p.ago === null ? "未実施" : p.recovered ? "回復済" : p.ago + "日前"}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                </div>
+                {suggestion.picks.length > 0 &&
+                  <button className="btn btn-primary w-full py-2.5 text-sm" onClick={addAllSuggested}>＋ すべて今日のメニューに追加</button>}
+              </div>
+            )}
+          </div>
 
           <div className="card p-4 mb-4">
             <div className="flex items-center justify-between mb-2">
@@ -1028,6 +1124,18 @@
       const macros = useMemo(() => calcMacros(p), [p]);
       const bmr = Math.round(calcBMR(p));
       const tdee = Math.round(calcTDEE(p));
+
+      const today = todayStr();
+      const intake = state.intakeLog[today] || { water: 0, kcal: 0, protein: 0 };
+      const addIntake = (patch) => setState(s => {
+        const cur = s.intakeLog[today] || { water: 0, kcal: 0, protein: 0 };
+        const next = {
+          water: Math.max(0, cur.water + (patch.water || 0)),
+          kcal: Math.max(0, cur.kcal + (patch.kcal || 0)),
+          protein: Math.max(0, cur.protein + (patch.protein || 0)),
+        };
+        return { ...s, intakeLog: { ...s.intakeLog, [today]: next } };
+      });
 
       return (
         <div className="p-4 pb-28 fade-in">
@@ -1110,6 +1218,44 @@
             <SliderRow label="脂質" value={p.fatPerKg} min={0.8} max={1.0} step={0.05}
               onChange={(v) => up("fatPerKg", v)} suffix={`g/kg（${Math.round(p.weight*p.fatPerKg)}g）`} />
             <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>炭水化物は残りカロリーから自動算出されます。</p>
+          </div>
+
+          {/* daily intake tracker */}
+          <div className="card p-4 mt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-extrabold">今日の摂取トラッキング</h3>
+              <Badge tone="cyan">{today.slice(5)}</Badge>
+            </div>
+
+            <IntakeRow label="💧 水分" value={intake.water} goal={WATER_GOAL} unit="杯" color="var(--accent)"
+              buttons={[["＋1杯", { water: 1 }], ["−1杯", { water: -1 }]]} onAdd={addIntake} />
+            <IntakeRow label="🔥 カロリー" value={intake.kcal} goal={macros.calories} unit="kcal" color="var(--warn)"
+              buttons={[["+250", { kcal: 250 }], ["+500", { kcal: 500 }], ["−250", { kcal: -250 }]]} onAdd={addIntake} />
+            <IntakeRow label="🥩 タンパク質" value={intake.protein} goal={macros.protein} unit="g" color="var(--accent-2)"
+              buttons={[["+20", { protein: 20 }], ["+30", { protein: 30 }], ["−20", { protein: -20 }]]} onAdd={addIntake} />
+
+            <p className="text-[11px] mt-2" style={{ color: "var(--text-faint)" }}>
+              目標は上のPFC計算と連動。日付が変わると自動リセットされます。
+            </p>
+          </div>
+        </div>
+      );
+    }
+    function IntakeRow({ label, value, goal, unit, color, buttons, onAdd }) {
+      const pct = Math.min(100, goal > 0 ? (value / goal) * 100 : 0);
+      return (
+        <div className="mb-3">
+          <div className="flex justify-between items-baseline text-sm mb-1">
+            <span>{label}</span>
+            <span><b style={{ color }}>{Math.round(value)}</b> <span className="text-[11px]" style={{ color: "var(--text-faint)" }}>/ {Math.round(goal)} {unit}</span></span>
+          </div>
+          <div className="w-full h-2.5 rounded-full overflow-hidden mb-2" style={{ background: "var(--surface-2)" }}>
+            <div className="h-full ring-progress" style={{ width: pct + "%", background: color }}></div>
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {buttons.map(([lbl, patch], i) => (
+              <button key={i} className="chip" style={{ background: "var(--surface-2)", color: "var(--text-dim)" }} onClick={() => onAdd(patch)}>{lbl}</button>
+            ))}
           </div>
         </div>
       );
@@ -1261,8 +1407,34 @@
       const pct = Math.max(0, Math.min(100, ((g.xp - curLvlXp) / (nextLvlXp - curLvlXp || 1)) * 100));
       const split = SPLITS.find(s => s.key === state.settings.split) || SPLITS[0];
       const fileRef = useRef(null);
+      const [syncCode, setSyncCode] = useState("");
+      const [importCode, setImportCode] = useState("");
 
       const setSetting = (key, val) => setState(s => ({ ...s, settings: { ...s.settings, [key]: val } }));
+
+      const encodeData = (obj) => btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+      const decodeData = (code) => JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+      const genSyncCode = () => { try { setSyncCode(encodeData(state)); } catch (e) { alert("コード生成に失敗しました"); } };
+      const copySyncCode = () => {
+        try {
+          if (navigator.clipboard) navigator.clipboard.writeText(syncCode);
+          alert("同期コードをコピーしました");
+        } catch (e) { alert("コピーできませんでした。手動で選択してください"); }
+      };
+      const applySyncCode = () => {
+        try {
+          const parsed = decodeData(importCode);
+          const base = defaultState();
+          setState(recompute({ ...base, ...parsed,
+            profile: { ...base.profile, ...(parsed.profile || {}) },
+            settings: { ...base.settings, ...(parsed.settings || {}) },
+            intakeLog: parsed.intakeLog || {},
+          }));
+          applyTheme((parsed.settings && parsed.settings.theme) || "dark");
+          setImportCode("");
+          alert("同期が完了しました");
+        } catch (e) { alert("無効な同期コードです"); }
+      };
 
       const exportData = () => {
         try {
@@ -1410,6 +1582,32 @@
             <button className="btn w-full py-3" style={{ background: "rgba(255,77,109,.15)", color: "var(--bad)" }} onClick={resetAll}>🗑 全データをリセット</button>
           </div>
 
+          {/* cross-device sync (code-based, serverless) */}
+          <div className="card p-4 mb-4 space-y-2">
+            <h3 className="font-extrabold mb-1">端末間同期（コード方式）</h3>
+            <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
+              サーバー不要。コードを生成して別端末に貼り付ければデータを移行できます。
+            </p>
+            <button className="btn btn-ghost w-full py-3" onClick={genSyncCode}>🔗 同期コードを生成</button>
+            {syncCode && (
+              <div className="slide-up">
+                <textarea readOnly value={syncCode} rows={3}
+                  className="w-full rounded-xl p-2 text-[11px] no-scrollbar outline-none"
+                  style={{ background: "var(--surface-2)", color: "var(--text-dim)", border: "1px solid var(--border)" }} />
+                <button className="btn btn-primary w-full py-2.5 mt-1 text-sm" onClick={copySyncCode}>📋 コピー</button>
+              </div>
+            )}
+            <textarea value={importCode} onChange={(e) => setImportCode(e.target.value)} rows={3}
+              placeholder="別端末で生成した同期コードを貼り付け"
+              className="w-full rounded-xl p-2 text-[11px] no-scrollbar outline-none mt-2"
+              style={{ background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--border)" }} />
+            <button className="btn btn-ghost w-full py-3" disabled={!importCode}
+              style={{ opacity: importCode ? 1 : 0.5 }} onClick={applySyncCode}>📲 コードから復元</button>
+            <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>
+              ※ Apple Health / Google Fit 連携や自動クラウド同期はバックエンド/ネイティブが必要なため本アプリ単体では対象外です。
+            </p>
+          </div>
+
           <div className="text-center text-[11px]" style={{ color: "var(--text-faint)" }}>
             MUSCLE FORGE v{APP_VERSION}
           </div>
@@ -1543,6 +1741,15 @@
     }
 
     ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+
+  <!-- Service Worker registration (plain JS, not transpiled) -->
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", function () {
+        navigator.serviceWorker.register("sw.js").catch(function () {});
+      });
+    }
   </script>
 </body>
 </html>
