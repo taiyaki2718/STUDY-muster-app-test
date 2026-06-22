@@ -8,7 +8,7 @@
 「GoalFlow: Holographic OS」── 目標管理 + 集中タイマー + フラッシュカードを
 ホログラフィックUI（リキッド・グラスモーフィズム）でまとめた、**完全オフライン対応の
 学習計画 PWA**。元リポジトリ名は `STUDY-muster-app-test`（勉強計画アプリ）。
-開発者表記は「たいやき」、アプリ内バージョンは `v1.2.0`。
+開発者表記は「たいやき」、アプリ内バージョンは `v1.2.1`。
 
 ## 2. 技術スタック（コードから確認済み・推測なし）
 
@@ -156,6 +156,15 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / SET_IDENTITY / COMPLETE_ONBOARDING / IM
   自前パース）。吹き出しが逐次埋まり、待機中はタイピングインジケータ表示。
   `tests/coach_stream.test.mjs`（7件、チャンク境界/不正JSON/エラーイベント）。
   ※ 目標分解は構造化出力のため非ストリーミングのまま（全文JSONが必要）。
+
+### ✅ AIコーチの提供方法を拡張（v1.2.1）
+- **任意のバックエンドproxy対応**: `AI_PROXY_URL` 定数にデプロイ先(例 Cloudflare Worker)を入れると、
+  アプリ利用者は**APIキー入力なし**でAIコーチを使える（鍵はproxyのサーバー秘密で保持）。
+  `ClaudeAPI.buildReq` が proxy 経由(鍵なし) or BYOK(各自の鍵で直接) を自動切替。
+  `ClaudeAPI.available()/usingProxy()` で Coach のゲート判定。空なら従来どおりBYOK/キー不要オートプラン。
+- proxy 実体は `ai-proxy/worker.js`（CORS制限・`max_tokens`上限）＋ `ai-proxy/README.md`（デプロイ手順）。
+- 設計判断: コードに鍵直書きは公開リポで危険のため禁止。「利用者ゼロ設定」を満たすには
+  オーナーが一度proxyをデプロイ（鍵はサーバー側）。利用料はオーナー負担、悪用対策を同梱。
 
 ### ✅ フェーズ「オートプラン — キー不要の自動カレンダー割り当て」で追加（v1.2.0）
 - **APIキー不要**の決定論的スケジューラ `planGoal`/`planTaskDates`：目標＋期限＋頻度

@@ -697,32 +697,48 @@ const ApiKeyStore = {
   has() { return !!this.get(); }
 };
 
+/* AIコーチのバックエンドproxy URL。
+   ここに自分の Cloudflare Worker 等のURLを入れて公開すると、
+   アプリ利用者は「APIキー入力なし」でAIコーチを使える（鍵はサーバー秘密で保持）。
+   空のままなら従来どおり BYOK（各自のキー）にフォールバックする。
+   例: const AI_PROXY_URL = 'https://goalflow-ai.example.workers.dev';
+   ※このURL自体は秘密ではない（秘密の鍵はproxyサーバー側に置く）。デプロイ手順は ai-proxy/README.md。 */
+const AI_PROXY_URL = '';
+
 const ClaudeAPI = (() => {
   const ENDPOINT = 'https://api.anthropic.com/v1/messages';
   const MODEL = 'claude-opus-4-8';
 
-  async function call(body) {
+  // proxy があれば proxy 経由（鍵不要）。無ければ各自の鍵で直接 Anthropic を叩く。
+  function usingProxy() { return !!AI_PROXY_URL; }
+  function available() { return usingProxy() || ApiKeyStore.has(); }
+  function buildReq(body, stream) {
+    const payload = JSON.stringify({ model: MODEL, ...(stream ? { stream: true } : {}), ...body });
+    if (usingProxy()) {
+      return { url: AI_PROXY_URL, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload } };
+    }
     const key = ApiKeyStore.get();
     if (!key) { const e = new Error('APIキーが未設定です'); e.code = 'NO_KEY'; throw e; }
+    return { url: ENDPOINT, init: { method: 'POST', headers: {
+      'content-type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    }, body: payload } };
+  }
+
+  async function call(body) {
+    const { url, init } = buildReq(body, false);
     let res;
     try {
-      res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({ model: MODEL, ...body })
-      });
+      res = await fetch(url, init);
     } catch (netErr) {
       const e = new Error('通信に失敗しました（オフラインの可能性）'); e.code = 'NETWORK'; throw e;
     }
     if (!res.ok) {
       let msg = `エラー (HTTP ${res.status})`;
       try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
-      if (res.status === 401) msg = 'APIキーが無効です。設定を確認してください。';
+      if (res.status === 401) msg = usingProxy() ? 'AIサーバーの認証に失敗しました（管理者の設定をご確認ください）。' : 'APIキーが無効です。設定を確認してください。';
       const e = new Error(msg); e.code = 'HTTP'; e.status = res.status; throw e;
     }
     return res.json();
@@ -731,27 +747,17 @@ const ClaudeAPI = (() => {
   // SSE ストリーミング呼び出し。content_block_delta の text_delta を順次 onDelta に渡し、
   // 最終的な全文を返す。SDK 不使用のため fetch の ReadableStream を自前でパースする。
   async function callStream(body, onDelta) {
-    const key = ApiKeyStore.get();
-    if (!key) { const e = new Error('APIキーが未設定です'); e.code = 'NO_KEY'; throw e; }
+    const { url, init } = buildReq(body, true);
     let res;
     try {
-      res = await fetch(ENDPOINT, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-api-key': key,
-          'anthropic-version': '2023-06-01',
-          'anthropic-dangerous-direct-browser-access': 'true'
-        },
-        body: JSON.stringify({ model: MODEL, stream: true, ...body })
-      });
+      res = await fetch(url, init);
     } catch (netErr) {
       const e = new Error('通信に失敗しました（オフラインの可能性）'); e.code = 'NETWORK'; throw e;
     }
     if (!res.ok) {
       let msg = `エラー (HTTP ${res.status})`;
       try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
-      if (res.status === 401) msg = 'APIキーが無効です。設定を確認してください。';
+      if (res.status === 401) msg = usingProxy() ? 'AIサーバーの認証に失敗しました（管理者の設定をご確認ください）。' : 'APIキーが無効です。設定を確認してください。';
       const e = new Error(msg); e.code = 'HTTP'; e.status = res.status; throw e;
     }
     if (!res.body || !res.body.getReader) {
@@ -812,6 +818,7 @@ const ClaudeAPI = (() => {
     'ダークパターン・通知スパム・依存や罪悪感を煽る発言はしません。ユーザーの長期的な幸福を最優先します。';
 
   return {
+    available, usingProxy,
     async decompose({ title, deadline, identity }) {
       const schema = {
         type: 'object',
@@ -2226,7 +2233,7 @@ function Settings() {
         <div class="holo-label mb-4" style="margin-top: 24px;">アプリ情報</div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">バージョン</span>
-          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.2.0</span>
+          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.2.1</span>
         </div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">開発者</span>
@@ -2402,7 +2409,8 @@ function buildCoachContext(state) {
 function Coach({ go }) {
   const { state, dispatch, addToast } = useApp();
   const [mode, setMode] = useState('decompose');
-  const [hasKey, setHasKey] = useState(ApiKeyStore.has());
+  // proxy が設定されていれば全利用者が鍵不要でAI利用可。無ければ各自のキー有無で判定。
+  const [hasKey, setHasKey] = useState(ClaudeAPI.available());
   const [autoPlan, setAutoPlan] = useState(null);
 
   // --- 目標分解 ---
@@ -2576,7 +2584,7 @@ function Coach({ go }) {
             <button class="glass-btn glass-btn--primary glass-btn--icon" disabled=${chatLoading || !input.trim()} onClick=${() => send()}><${Icon} n="send" size=18/></button>
           </div>
         </div>
-        <div class="holo-label text-center" style="text-transform:none; letter-spacing:normal; opacity:0.75;">あなたのAPIキーで直接Anthropicに送信されます。要約された状況のみを共有します。</div>
+        <div class="holo-label text-center" style="text-transform:none; letter-spacing:normal; opacity:0.75;">${ClaudeAPI.usingProxy() ? 'AIサーバー経由で送信されます。' : 'あなたのAPIキーで直接Anthropicに送信されます。'}要約された状況のみを共有します。</div>
       `}
 
       ${autoPlan ? html`<${AutoPlanModal} initial=${autoPlan} onClose=${() => setAutoPlan(null)} go=${go}/>` : null}
