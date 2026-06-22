@@ -1,0 +1,1548 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0a0a14" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="MUSCLE FORGE" />
+  <title>MUSCLE FORGE — 筋トレ最強アプリ</title>
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- React + Babel standalone -->
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    :root {
+      /* ===== Design Tokens ===== */
+      --bg: #0a0a14;
+      --bg-soft: #11121f;
+      --surface: #16182a;
+      --surface-2: #1d2036;
+      --border: #2a2e4a;
+      --text: #e8eaf6;
+      --text-dim: #9aa0c4;
+      --text-faint: #646b96;
+      --accent: #00e5ff;        /* neon cyan */
+      --accent-2: #b14dff;      /* neon purple */
+      --accent-3: #ff2e88;      /* neon pink */
+      --good: #2bd99f;
+      --warn: #ffb02e;
+      --bad: #ff4d6d;
+      --radius: 18px;
+      --radius-sm: 12px;
+      --shadow: 0 8px 30px rgba(0,0,0,0.45);
+      --glow: 0 0 18px rgba(0,229,255,0.55);
+    }
+    [data-theme="light"] {
+      --bg: #eef1fb;
+      --bg-soft: #e3e7f7;
+      --surface: #ffffff;
+      --surface-2: #f1f3fc;
+      --border: #d3d8ef;
+      --text: #15182a;
+      --text-dim: #4a5078;
+      --text-faint: #7a80a8;
+      --shadow: 0 8px 24px rgba(60,70,140,0.12);
+    }
+    * { -webkit-tap-highlight-color: transparent; box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      overscroll-behavior-y: none; }
+    #root { min-height: 100vh; }
+    .app-bg {
+      background:
+        radial-gradient(900px 500px at 80% -10%, rgba(177,77,255,0.12), transparent 60%),
+        radial-gradient(700px 500px at -10% 10%, rgba(0,229,255,0.10), transparent 55%),
+        var(--bg);
+    }
+    .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+    .glass { background: color-mix(in srgb, var(--surface) 78%, transparent); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+    .neon-text { text-shadow: 0 0 12px rgba(0,229,255,0.55); }
+    .btn { min-height: 44px; border-radius: var(--radius-sm); font-weight: 700; transition: transform .12s ease, box-shadow .2s ease, background .2s ease; }
+    .btn:active { transform: scale(0.96); }
+    .btn-primary { background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #04121a; box-shadow: 0 6px 18px rgba(0,229,255,0.30); }
+    .btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
+    .chip { border-radius: 999px; padding: 6px 12px; font-size: 12px; font-weight: 700; border: 1px solid var(--border); }
+    .tab-active { color: var(--accent); }
+    input, select { font-size: 16px; } /* prevent iOS zoom */
+    .stepper-btn { width: 44px; height: 44px; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:800; }
+    .slide-up { animation: slideUp .28s cubic-bezier(.2,.8,.2,1); }
+    @keyframes slideUp { from { transform: translateY(24px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    .pop { animation: pop .4s cubic-bezier(.2,1.4,.4,1); }
+    @keyframes pop { 0% { transform: scale(.7); opacity:0; } 60% { transform: scale(1.08); } 100% { transform: scale(1); opacity:1; } }
+    .pulse-glow { animation: pulseGlow 1.6s ease-in-out infinite; }
+    @keyframes pulseGlow { 0%,100% { filter: drop-shadow(0 0 4px rgba(0,229,255,.5)); } 50% { filter: drop-shadow(0 0 14px rgba(0,229,255,.95)); } }
+    .muscle { transition: fill .25s ease, filter .25s ease, opacity .2s ease; cursor: pointer; }
+    .muscle:active { opacity: .8; }
+    .muscle-selected { filter: drop-shadow(0 0 8px var(--accent)); }
+    .confetti { position: fixed; inset: 0; pointer-events: none; z-index: 60; }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .ring-progress { transition: stroke-dashoffset .6s cubic-bezier(.2,.8,.2,1); }
+    .bar-grow { transition: height .5s cubic-bezier(.2,.8,.2,1); }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel" data-presets="react">
+    const { useState, useEffect, useMemo, useRef, useCallback } = React;
+
+    /* ============================================================
+       VERSION / STORAGE
+    ============================================================ */
+    const APP_VERSION = "1.0.0";
+    const STORAGE_KEY = "muscleForge_v1";
+
+    /* ============================================================
+       MUSCLE DEFINITIONS
+    ============================================================ */
+    const MUSCLES = {
+      // FRONT
+      chest:      { ja: "大胸筋",       en: "Chest",          side: "front", mev: 10, mav: 18, mrv: 22 },
+      frontDelts: { ja: "三角筋前部",   en: "Front Delts",    side: "front", mev: 6,  mav: 12, mrv: 16 },
+      biceps:     { ja: "上腕二頭筋",   en: "Biceps",         side: "front", mev: 8,  mav: 16, mrv: 20 },
+      forearms:   { ja: "前腕",         en: "Forearms",       side: "both",  mev: 6,  mav: 12, mrv: 16 },
+      abs:        { ja: "腹直筋",       en: "Abs",            side: "front", mev: 8,  mav: 16, mrv: 22 },
+      obliques:   { ja: "腹斜筋",       en: "Obliques",       side: "front", mev: 6,  mav: 12, mrv: 16 },
+      quads:      { ja: "大腿四頭筋",   en: "Quads",          side: "front", mev: 8,  mav: 16, mrv: 20 },
+      adductors:  { ja: "内転筋",       en: "Adductors",      side: "front", mev: 6,  mav: 12, mrv: 16 },
+      // BACK
+      traps:      { ja: "僧帽筋",       en: "Traps",          side: "back",  mev: 8,  mav: 16, mrv: 22 },
+      rearDelts:  { ja: "三角筋後部",   en: "Rear Delts",     side: "back",  mev: 6,  mav: 12, mrv: 18 },
+      lats:       { ja: "広背筋",       en: "Lats",           side: "back",  mev: 10, mav: 18, mrv: 22 },
+      erectors:   { ja: "脊柱起立筋",   en: "Erectors",       side: "back",  mev: 6,  mav: 12, mrv: 16 },
+      triceps:    { ja: "上腕三頭筋",   en: "Triceps",        side: "back",  mev: 8,  mav: 16, mrv: 20 },
+      glutes:     { ja: "大臀筋",       en: "Glutes",         side: "back",  mev: 8,  mav: 16, mrv: 20 },
+      hamstrings: { ja: "ハムストリングス", en: "Hamstrings",  side: "back",  mev: 8,  mav: 16, mrv: 20 },
+      calves:     { ja: "腓腹筋",       en: "Calves",         side: "back",  mev: 8,  mav: 16, mrv: 20 },
+    };
+
+    /* ============================================================
+       EXERCISE DATABASE  (5-6 per muscle)
+       type: compound | isolation
+       equipment: barbell | dumbbell | machine | cable | bodyweight
+       level: beginner | intermediate | advanced
+    ============================================================ */
+    const repScheme = { strength: "3〜5回 × 4〜5セット", hypertrophy: "8〜12回 × 3〜4セット", endurance: "15〜20回 × 2〜3セット" };
+    const ex = (id, nameJa, nameEn, muscle, type, equipment, level, primary, secondary, tips, mistakes, reps) =>
+      ({ id, nameJa, nameEn, muscle, type, equipment, level, primary, secondary, tips, mistakes, reps: reps || repScheme });
+
+    const EXERCISE_DB = [
+      // ===== CHEST =====
+      ex("be_bench","ベンチプレス","Barbell Bench Press","chest","compound","barbell","intermediate","大胸筋","三角筋前部・上腕三頭筋","肩甲骨を寄せて下げ、胸の中部にバーを下ろす。足で床を踏ん張りアーチを作る。","お尻が浮く／バーが首側に落ちる／肩がすくむ"),
+      ex("ch_db_press","ダンベルプレス","Dumbbell Bench Press","chest","compound","dumbbell","beginner","大胸筋","三角筋前部・上腕三頭筋","可動域を広く取り、ダンベルを胸の高さまで深く下ろす。手首は立てる。","下ろしが浅い／肘を開きすぎる／軌道がブレる"),
+      ex("ch_incline","インクラインダンベルプレス","Incline DB Press","chest","compound","dumbbell","intermediate","大胸筋上部","三角筋前部","ベンチ角度30〜45度。鎖骨方向へ押し上げ、上部を狙う。","角度が急すぎて肩種目化／反動を使う"),
+      ex("ch_fly","ダンベルフライ","Dumbbell Fly","chest","isolation","dumbbell","beginner","大胸筋","—","肘を軽く曲げたまま弧を描く。ストレッチを感じる位置で止める。","肘を伸ばしすぎる／プレス動作になる"),
+      ex("ch_cable_fly","ケーブルクロスオーバー","Cable Crossover","chest","isolation","cable","intermediate","大胸筋","—","常に張力をかけ、最後は手を交差させ収縮を最大化。","反動で振る／可動域が狭い"),
+      ex("ch_pushup","腕立て伏せ","Push-up","chest","compound","bodyweight","beginner","大胸筋","三角筋前部・上腕三頭筋","体を一直線に保ち胸を床ギリギリまで。手幅は肩よりやや広め。","腰が反る／可動域が浅い／首が落ちる"),
+
+      // ===== FRONT DELTS =====
+      ex("fd_ohp","オーバーヘッドプレス","Overhead Press","frontDelts","compound","barbell","intermediate","三角筋前部","三角筋中部・上腕三頭筋","体幹を締め、頭上へ真っ直ぐ。バーが顔を通る軌道で。","腰を反らせて押す／肘が落ちる"),
+      ex("fd_db_press","ダンベルショルダープレス","DB Shoulder Press","frontDelts","compound","dumbbell","beginner","三角筋前部","三角筋中部","肘を軽く前に出し、耳の高さから押し上げる。","下ろしすぎて肩を痛める／反動"),
+      ex("fd_front_raise","フロントレイズ","Front Raise","frontDelts","isolation","dumbbell","beginner","三角筋前部","—","肩の高さまで前方挙上。小指側をやや上げない。","反動で振る／高く上げすぎる"),
+      ex("fd_arnold","アーノルドプレス","Arnold Press","frontDelts","compound","dumbbell","intermediate","三角筋前部","三角筋中部","回旋を加え可動域を広く。下で手のひらを内向きに。","回旋を急ぐ／重量過多でフォーム崩れ"),
+      ex("fd_pike","パイクプッシュアップ","Pike Push-up","frontDelts","compound","bodyweight","intermediate","三角筋前部","上腕三頭筋","腰を高く上げ逆V字で頭頂を床へ。自重で肩を狙う。","腰が落ちる／可動域が浅い"),
+
+      // ===== BICEPS =====
+      ex("bi_barbell_curl","バーベルカール","Barbell Curl","biceps","isolation","barbell","beginner","上腕二頭筋","前腕","肘を体側に固定し、反動を使わず巻き上げる。","肘が前に出る／体を反らす"),
+      ex("bi_db_curl","ダンベルカール","Dumbbell Curl","biceps","isolation","dumbbell","beginner","上腕二頭筋","前腕","回外（手首を返す）を意識し収縮を強める。","肩で持ち上げる／下ろしが速い"),
+      ex("bi_incline","インクラインカール","Incline DB Curl","biceps","isolation","dumbbell","intermediate","上腕二頭筋（長頭）","—","ベンチに寄りかかり腕を後方へ。ストレッチ強調。","肘を前に出す／可動域不足"),
+      ex("bi_hammer","ハンマーカール","Hammer Curl","biceps","isolation","dumbbell","beginner","上腕二頭筋・腕橈骨筋","前腕","手のひらを内向きに保ったまま挙上。前腕も同時に。","手首を返す／反動を使う"),
+      ex("bi_chin","チンアップ","Chin-up","biceps","compound","bodyweight","intermediate","上腕二頭筋","広背筋","逆手で肩幅。胸を引き上げ顎をバーへ。","可動域が浅い／反動キッピング"),
+
+      // ===== FOREARMS =====
+      ex("fa_wrist_curl","リストカール","Wrist Curl","forearms","isolation","dumbbell","beginner","前腕屈筋群","—","前腕を台に固定し手首だけで巻く。フルレンジで。","腕全体で動かす／可動域不足"),
+      ex("fa_rev_wrist","リバースリストカール","Reverse Wrist Curl","forearms","isolation","dumbbell","beginner","前腕伸筋群","—","手の甲側へ反らす。軽重量で丁寧に。","重すぎて可動域が出ない"),
+      ex("fa_farmer","ファーマーズウォーク","Farmer's Walk","forearms","compound","dumbbell","beginner","前腕・握力","僧帽筋","重いダンベルを持ち姿勢を保ち歩く。握り潰す意識。","背中が丸まる／肩がすくむ"),
+      ex("fa_rev_curl","リバースカール","Reverse Curl","forearms","isolation","barbell","intermediate","腕橈骨筋・前腕伸筋","上腕二頭筋","順手で握りカール。手首は固定。","手首が折れる／反動"),
+      ex("fa_dead_hang","デッドハング","Dead Hang","forearms","isolation","bodyweight","beginner","握力・前腕","—","バーにぶら下がり耐える。肩は軽く下げる。","肩を完全に脱力しすぎる"),
+
+      // ===== ABS =====
+      ex("ab_crunch","クランチ","Crunch","abs","isolation","bodyweight","beginner","腹直筋","—","みぞおちを丸めるイメージで上体を起こす。首を引っ張らない。","勢いで起き上がる／首に力"),
+      ex("ab_legraise","レッグレイズ","Leg Raise","abs","isolation","bodyweight","beginner","腹直筋下部","腸腰筋","骨盤を後傾させ脚を下ろす。腰を反らさない。","腰が浮く／反動で振る"),
+      ex("ab_plank","プランク","Plank","abs","isolation","bodyweight","beginner","腹直筋・体幹","—","頭から踵まで一直線。お腹を凹ませ呼吸を続ける。","お尻が上がる／腰が落ちる"),
+      ex("ab_cable_crunch","ケーブルクランチ","Cable Crunch","abs","isolation","cable","intermediate","腹直筋","—","膝立ちで背中を丸めて引く。負荷を腹で受ける。","腕で引く／股関節で曲げる"),
+      ex("ab_hanging","ハンギングレッグレイズ","Hanging Leg Raise","abs","isolation","bodyweight","advanced","腹直筋下部","腸腰筋","ぶら下がり膝or脚を持ち上げる。骨盤を巻く。","反動でスイング／可動域不足"),
+
+      // ===== OBLIQUES =====
+      ex("ob_russian","ロシアンツイスト","Russian Twist","obliques","isolation","bodyweight","beginner","腹斜筋","腹直筋","上体を倒し左右に捻る。みぞおちから回旋。","腕だけ動かす／背中が丸まりすぎ"),
+      ex("ob_side_plank","サイドプランク","Side Plank","obliques","isolation","bodyweight","beginner","腹斜筋・体幹","—","横向きで体を一直線に。腰を持ち上げ保持。","腰が落ちる／肩がすくむ"),
+      ex("ob_bicycle","バイシクルクランチ","Bicycle Crunch","obliques","isolation","bodyweight","beginner","腹斜筋","腹直筋","肘と逆膝を近づけ捻る。ゆっくり対角。","首を引っ張る／速さ重視"),
+      ex("ob_woodchop","ケーブルウッドチョップ","Cable Woodchop","obliques","isolation","cable","intermediate","腹斜筋","体幹","斜めに引き下ろす/振り上げる。回旋を体幹で。","腕主導／膝が流れる"),
+      ex("ob_side_bend","サイドベンド","Dumbbell Side Bend","obliques","isolation","dumbbell","beginner","腹斜筋","—","片手にダンベル、横に倒して戻す。可動域を出す。","前後に傾く／反動"),
+
+      // ===== QUADS =====
+      ex("qu_squat","バーベルスクワット","Barbell Squat","quads","compound","barbell","intermediate","大腿四頭筋","大臀筋・ハムストリングス","胸を張り股関節と膝を同時に曲げる。膝はつま先方向。","膝が内に入る／踵が浮く／背中が丸まる"),
+      ex("qu_leg_press","レッグプレス","Leg Press","quads","compound","machine","beginner","大腿四頭筋","大臀筋","足を肩幅、深く下ろす。腰がプレートから浮かない範囲で。","可動域が浅い／膝を伸ばし切りロック"),
+      ex("qu_lunge","ランジ","Lunge","quads","compound","dumbbell","beginner","大腿四頭筋","大臀筋","大きく踏み出し前膝を90度。上体は立てる。","膝がつま先より大きく前に出る／バランス崩れ"),
+      ex("qu_leg_ext","レッグエクステンション","Leg Extension","quads","isolation","machine","beginner","大腿四頭筋","—","膝を伸ばし切り収縮。ゆっくり戻す。","反動で蹴り上げる／戻しが速い"),
+      ex("qu_bulgarian","ブルガリアンスクワット","Bulgarian Split Squat","quads","compound","dumbbell","intermediate","大腿四頭筋","大臀筋","後ろ足を台に乗せ片脚で深く沈む。前脚に荷重。","前傾しすぎ／後ろ足に頼る"),
+      ex("qu_goblet","ゴブレットスクワット","Goblet Squat","quads","compound","dumbbell","beginner","大腿四頭筋","大臀筋","ダンベルを胸前で保持し深くしゃがむ。初心者に最適。","背中が丸まる／浅い"),
+
+      // ===== ADDUCTORS =====
+      ex("ad_machine","アダクションマシン","Hip Adduction Machine","adductors","isolation","machine","beginner","内転筋群","—","脚を閉じる動作で内ももを収縮。ゆっくり開いて戻す。","反動／可動域不足"),
+      ex("ad_sumo","スモウデッドリフト","Sumo Deadlift","adductors","compound","barbell","intermediate","内転筋・大臀筋","ハムストリングス","脚を広く取り膝をつま先方向へ。内ももで床を押す。","膝が内に入る／背中が丸まる"),
+      ex("ad_cossack","コサックスクワット","Cossack Squat","adductors","compound","bodyweight","intermediate","内転筋","大腿四頭筋","片側へ深く沈み反対脚を伸ばす。内もものストレッチ。","踵が浮く／バランス崩れ"),
+      ex("ad_side_lunge","サイドランジ","Side Lunge","adductors","compound","dumbbell","beginner","内転筋","大腿四頭筋","横に大きく踏み出し片膝を曲げる。内ももで戻る。","膝が内に入る／浅い"),
+      ex("ad_ball_squeeze","ボールスクイーズ","Adductor Ball Squeeze","adductors","isolation","bodyweight","beginner","内転筋群","—","膝の間でボールを潰す。収縮を数秒保持。","息を止める／力が抜ける"),
+
+      // ===== TRAPS =====
+      ex("tr_shrug","バーベルシュラッグ","Barbell Shrug","traps","isolation","barbell","beginner","僧帽筋上部","—","肩を真上にすくめ上げる。頂点で1秒静止。","肩を回す／前傾する"),
+      ex("tr_db_shrug","ダンベルシュラッグ","Dumbbell Shrug","traps","isolation","dumbbell","beginner","僧帽筋上部","—","腕は脱力し肩だけ上下。可動域をフルに。","肘を曲げて引く／反動"),
+      ex("tr_facepull","フェイスプル","Face Pull","traps","compound","cable","intermediate","僧帽筋中下部","三角筋後部","顔の高さへ引き肘を高く。肩甲骨を寄せる。","腕で引く／重すぎる"),
+      ex("tr_upright","アップライトロウ","Upright Row","traps","compound","barbell","intermediate","僧帽筋","三角筋","肘から引き上げ鎖骨付近まで。手幅は肩幅。","引き上げすぎて肩を挟む／手幅が狭い"),
+      ex("tr_farmer","ファーマーズキャリー","Farmer's Carry","traps","compound","dumbbell","beginner","僧帽筋","前腕・体幹","重量を持ち肩を引き下げ姿勢維持で歩く。","肩がすくみっぱなし／背中丸まる"),
+
+      // ===== REAR DELTS =====
+      ex("rd_reverse_fly","リアレイズ","Rear Delt Fly","rearDelts","isolation","dumbbell","beginner","三角筋後部","僧帽筋中部","前傾し肘軽く曲げ後方へ開く。肩甲骨は寄せすぎない。","僧帽筋で引く／反動"),
+      ex("rd_facepull","フェイスプル","Face Pull","rearDelts","compound","cable","intermediate","三角筋後部","僧帽筋","肘を高く保ち顔へ引く。外旋を加える。","腕主導／肘が下がる"),
+      ex("rd_rev_pec","リアデルトマシン","Reverse Pec Deck","rearDelts","isolation","machine","beginner","三角筋後部","僧帽筋","肘を軽く曲げ水平に開く。胸を張りすぎない。","肩甲骨だけ動く／反動"),
+      ex("rd_band_pull","バンドプルアパート","Band Pull-Apart","rearDelts","isolation","bodyweight","beginner","三角筋後部","僧帽筋中部","バンドを胸前で左右に引き開く。肩を下げる。","肩がすくむ／速い"),
+      ex("rd_bent_row","ベントオーバーリアロウ","Bent-over Rear Row","rearDelts","compound","dumbbell","intermediate","三角筋後部","広背筋","肘を外に張り高い位置へ引く。後部狙いの軌道。","脇を締めすぎて背中種目化"),
+
+      // ===== LATS =====
+      ex("la_pullup","懸垂","Pull-up","lats","compound","bodyweight","intermediate","広背筋","上腕二頭筋","肩幅より広めの順手。胸をバーへ引き上げる。","可動域が浅い／反動キッピング"),
+      ex("la_latpulldown","ラットプルダウン","Lat Pulldown","lats","compound","cable","beginner","広背筋","上腕二頭筋","鎖骨へ引き肩甲骨を下制。胸を張る。","後ろに倒れすぎ／腕で引く"),
+      ex("la_bb_row","ベントオーバーロウ","Barbell Row","lats","compound","barbell","intermediate","広背筋","僧帽筋・脊柱起立筋","上体を倒し腹へ引く。背中はニュートラル。","背中が丸まる／反動で引く"),
+      ex("la_db_row","ワンハンドロウ","One-arm DB Row","lats","compound","dumbbell","beginner","広背筋","僧帽筋","ベンチに片手を付き引き上げる。肘を腰へ。","体を捻る／肩がすくむ"),
+      ex("la_pullover","プルオーバー","Dumbbell Pullover","lats","isolation","dumbbell","intermediate","広背筋","大胸筋","頭上から弧を描き引き戻す。ストレッチ強調。","腰を反る／肘を曲げすぎる"),
+      ex("la_seated_row","シーテッドロウ","Seated Cable Row","lats","compound","cable","beginner","広背筋","僧帽筋中部","胸を張り腹へ引く。肩甲骨を寄せる。","背中を丸めて引く／反動"),
+
+      // ===== ERECTORS =====
+      ex("er_deadlift","デッドリフト","Deadlift","erectors","compound","barbell","advanced","脊柱起立筋","大臀筋・ハムストリングス","背中を真っ直ぐ保ち股関節主導で引く。バーは体に沿わせる。","背中が丸まる／腰で引く／バーが離れる"),
+      ex("er_back_ext","バックエクステンション","Back Extension","erectors","isolation","bodyweight","beginner","脊柱起立筋","大臀筋","背中を反りすぎず水平まで。ゆっくり戻す。","反りすぎ／反動"),
+      ex("er_goodmorning","グッドモーニング","Good Morning","erectors","compound","barbell","intermediate","脊柱起立筋","ハムストリングス","膝を軽く曲げ股関節から前傾。背中は固定。","背中が丸まる／膝を曲げすぎ"),
+      ex("er_superman","スーパーマン","Superman","erectors","isolation","bodyweight","beginner","脊柱起立筋","大臀筋","うつ伏せで手脚を同時に上げ保持。","反動で上げる／首を反らす"),
+      ex("er_rdl","ルーマニアンデッドリフト","Romanian Deadlift","erectors","compound","barbell","intermediate","脊柱起立筋・ハムストリングス","大臀筋","膝を軽く曲げ尻を後ろへ。背中を真っ直ぐ保つ。","背中が丸まる／膝が前に出る"),
+
+      // ===== TRICEPS =====
+      ex("ti_pushdown","プレスダウン","Triceps Pushdown","triceps","isolation","cable","beginner","上腕三頭筋","—","肘を体側に固定し下へ押し切る。戻しは丁寧に。","肘が動く／反動"),
+      ex("ti_skull","スカルクラッシャー","Skull Crusher","triceps","isolation","barbell","intermediate","上腕三頭筋","—","肘の位置を固定し額付近へ下ろす。肘を開かない。","肘が開く／重すぎる"),
+      ex("ti_dip","ディップス","Dips","triceps","compound","bodyweight","intermediate","上腕三頭筋","大胸筋下部","体を立て気味に肘を曲げる。肩を下げる。","肩が前に出る／深すぎ"),
+      ex("ti_overhead","オーバーヘッドエクステンション","Overhead Extension","triceps","isolation","dumbbell","beginner","上腕三頭筋（長頭）","—","頭上で肘を曲げ伸ばし。肘を固定しストレッチ。","肘が開く／反動"),
+      ex("ti_cgbp","ナローベンチプレス","Close-grip Bench","triceps","compound","barbell","intermediate","上腕三頭筋","大胸筋","手幅を肩幅で肘を体側に。みぞおちへ下ろす。","手幅が狭すぎ手首痛／肘が開く"),
+      ex("ti_kickback","キックバック","Triceps Kickback","triceps","isolation","dumbbell","beginner","上腕三頭筋","—","肘を後方に固定し前腕を伸ばし切る。収縮重視。","肘が下がる／反動"),
+
+      // ===== GLUTES =====
+      ex("gl_hipthrust","ヒップスラスト","Hip Thrust","glutes","compound","barbell","intermediate","大臀筋","ハムストリングス","肩を台に乗せ顎を引き腰を上げ切る。頂点で締める。","腰で反る／可動域不足"),
+      ex("gl_rdl","ルーマニアンデッドリフト","Romanian Deadlift","glutes","compound","barbell","intermediate","大臀筋","ハムストリングス","尻を後ろへ引きストレッチ。膝は軽く曲げ固定。","背中が丸まる／膝が前へ"),
+      ex("gl_bridge","グルートブリッジ","Glute Bridge","glutes","isolation","bodyweight","beginner","大臀筋","ハムストリングス","仰向けで腰を上げ尻を締める。頂点で静止。","腰で反る／踵が遠い"),
+      ex("gl_kickback","ケーブルキックバック","Cable Kickback","glutes","isolation","cable","beginner","大臀筋","—","脚を後方へ蹴り出し収縮。骨盤は固定。","腰を反る／反動"),
+      ex("gl_step_up","ステップアップ","Step-up","glutes","compound","dumbbell","beginner","大臀筋","大腿四頭筋","台に乗り込み立ち上がる。前脚で押す意識。","後ろ足で蹴る／台が低すぎ"),
+
+      // ===== HAMSTRINGS =====
+      ex("ha_leg_curl","レッグカール","Leg Curl","hamstrings","isolation","machine","beginner","ハムストリングス","—","膝を曲げ切り収縮。ゆっくり戻す。","反動で曲げる／お尻が浮く"),
+      ex("ha_rdl","ルーマニアンデッドリフト","Romanian Deadlift","hamstrings","compound","barbell","intermediate","ハムストリングス","大臀筋","膝を軽く曲げ尻を引きストレッチ。背中固定。","背中が丸まる／膝が前へ"),
+      ex("ha_stiff","スティッフレッグデッドリフト","Stiff-leg Deadlift","hamstrings","compound","dumbbell","intermediate","ハムストリングス","大臀筋","膝をほぼ伸ばし股関節から前傾。強いストレッチ。","膝を曲げすぎ／背中丸まる"),
+      ex("ha_nordic","ノルディックハムカール","Nordic Curl","hamstrings","isolation","bodyweight","advanced","ハムストリングス","—","膝立ちで足首固定し体を前へ倒し耐える。","腰で支える／落下が速い"),
+      ex("ha_glute_ham","グッドモーニング","Good Morning","hamstrings","compound","barbell","intermediate","ハムストリングス","脊柱起立筋","股関節主導で前傾し戻す。背中ニュートラル。","背中が丸まる／反動"),
+
+      // ===== CALVES =====
+      ex("ca_standing","スタンディングカーフレイズ","Standing Calf Raise","calves","isolation","machine","beginner","腓腹筋","ヒラメ筋","つま先立ちで踵を上げ切る。下で深くストレッチ。","可動域が浅い／反動"),
+      ex("ca_seated","シーテッドカーフレイズ","Seated Calf Raise","calves","isolation","machine","beginner","ヒラメ筋","腓腹筋","膝を曲げて座りヒラメ筋を狙う。フルレンジで。","反動／可動域不足"),
+      ex("ca_db_raise","ダンベルカーフレイズ","Dumbbell Calf Raise","calves","isolation","dumbbell","beginner","腓腹筋","ヒラメ筋","段差でフルストレッチ〜収縮。片脚でも可。","可動域が浅い／速い"),
+      ex("ca_jump","ジャンプロープ","Jump Rope","calves","compound","bodyweight","beginner","腓腹筋","ヒラメ筋","つま先で弾む。連続的に腓腹筋を使う。","踵から着地／姿勢崩れ"),
+      ex("ca_donkey","ドンキーカーフレイズ","Donkey Calf Raise","calves","isolation","bodyweight","intermediate","腓腹筋","ヒラメ筋","前傾姿勢で踵を上下。腓腹筋のストレッチ強。","膝を曲げる／可動域不足"),
+    ];
+
+    /* ============================================================
+       SVG BODY MAP PATHS (one side; bilateral mirrored at x=100)
+       viewBox 0 0 200 440
+    ============================================================ */
+    const FRONT_PATHS = {
+      frontDelts: { mirror: true, d: "M128,70 C141,67 153,74 153,89 C146,93 135,91 129,84 C126,80 126,74 128,70 Z" },
+      chest:      { mirror: true, d: "M102,80 C119,78 134,84 137,99 C135,112 121,117 105,112 C101,103 99,90 102,80 Z" },
+      biceps:     { mirror: true, d: "M141,95 C151,95 158,105 156,121 C154,133 146,137 140,130 C137,118 137,105 141,95 Z" },
+      forearms:   { mirror: true, d: "M150,139 C161,140 169,151 167,170 C165,182 156,184 151,174 C147,161 147,150 150,139 Z" },
+      abs:        { mirror: false, d: "M88,112 C100,108 112,108 112,112 L112,180 C100,186 100,186 88,180 Z" },
+      obliques:   { mirror: true, d: "M113,118 C123,120 128,133 126,156 C125,167 117,169 113,160 C112,146 112,131 113,118 Z" },
+      quads:      { mirror: true, d: "M102,214 C121,210 133,221 133,251 C132,284 122,300 110,297 C102,272 100,242 102,214 Z" },
+      adductors:  { mirror: true, d: "M90,216 C99,214 104,228 103,255 C102,274 95,280 91,270 C89,250 88,233 90,216 Z" },
+    };
+    const BACK_PATHS = {
+      traps:      { mirror: false, d: "M100,56 C113,59 123,66 120,82 C116,97 108,101 100,101 C92,101 84,97 80,82 C77,66 87,59 100,56 Z" },
+      rearDelts:  { mirror: true, d: "M128,72 C141,68 153,75 153,90 C146,94 135,92 129,86 C126,82 126,76 128,72 Z" },
+      lats:       { mirror: true, d: "M104,98 C123,96 133,105 133,125 C132,142 118,148 106,141 C103,126 102,110 104,98 Z" },
+      triceps:    { mirror: true, d: "M141,96 C151,96 158,106 156,123 C154,135 146,139 140,132 C137,120 137,106 141,96 Z" },
+      forearms:   { mirror: true, d: "M150,140 C161,141 169,152 167,171 C165,183 156,185 151,175 C147,162 147,151 150,140 Z" },
+      erectors:   { mirror: false, d: "M91,130 C100,128 109,130 109,130 L109,178 C100,184 100,184 91,178 Z" },
+      glutes:     { mirror: true, d: "M102,182 C121,180 135,189 134,203 C133,217 119,221 105,216 C101,207 99,193 102,182 Z" },
+      hamstrings: { mirror: true, d: "M102,222 C119,220 131,229 130,257 C129,289 120,301 110,298 C102,274 100,247 102,222 Z" },
+      calves:     { mirror: true, d: "M104,308 C119,306 127,320 125,346 C124,368 115,376 108,369 C103,348 102,328 104,308 Z" },
+    };
+
+    /* ============================================================
+       ACTIVITY LEVELS / GOALS / BADGES / SPLITS
+    ============================================================ */
+    const ACTIVITY_LEVELS = [
+      { v: 1.2,   label: "ほぼ運動なし（デスクワーク）" },
+      { v: 1.375, label: "軽い運動（週1〜3回）" },
+      { v: 1.55,  label: "中程度（週3〜5回）" },
+      { v: 1.725, label: "高い（週6〜7回）" },
+      { v: 1.9,   label: "非常に高い（肉体労働/2回練）" },
+    ];
+    const GOALS = [
+      { key: "cut",      label: "減量",  adjust: -400, color: "var(--bad)" },
+      { key: "maintain", label: "維持",  adjust: 0,    color: "var(--accent)" },
+      { key: "bulk",     label: "増量",  adjust: 300,  color: "var(--good)" },
+    ];
+    const BADGES = [
+      { id: "first_workout", icon: "🏁", name: "はじめの一歩", desc: "初めてトレーニングを記録", test: (s) => s.logs.length >= 1 },
+      { id: "bench_100",     icon: "🏋️", name: "ベンチ100kg",  desc: "ベンチプレスで100kg以上を挙上", test: (s) => s.logs.some(l => l.exerciseId === "be_bench" && l.sets.some(st => st.weight >= 100)) },
+      { id: "streak_7",      icon: "🔥", name: "7日連続",       desc: "7日連続でトレーニング", test: (s) => s.gamification.bestStreak >= 7 },
+      { id: "streak_30",     icon: "💎", name: "30日連続",      desc: "30日連続でトレーニング", test: (s) => s.gamification.bestStreak >= 30 },
+      { id: "ton_10",        icon: "🚛", name: "総挙上10トン",  desc: "累計挙上量が10,000kg到達", test: (s) => totalVolumeAll(s.logs) >= 10000 },
+      { id: "ton_100",       icon: "🦾", name: "総挙上100トン", desc: "累計挙上量が100,000kg到達", test: (s) => totalVolumeAll(s.logs) >= 100000 },
+      { id: "sessions_50",   icon: "📅", name: "50セッション",  desc: "50回のトレーニング日数", test: (s) => uniqueWorkoutDays(s.logs) >= 50 },
+      { id: "level_10",      icon: "⭐", name: "レベル10",      desc: "レベル10に到達", test: (s) => s.gamification.level >= 10 },
+    ];
+    const SPLITS = [
+      { key: "ppl",     name: "PPL（押す/引く/脚）", days: [
+        { name: "Push（押す）", muscles: ["chest","frontDelts","triceps"] },
+        { name: "Pull（引く）", muscles: ["lats","traps","rearDelts","biceps","forearms"] },
+        { name: "Legs（脚）",   muscles: ["quads","hamstrings","glutes","calves","adductors"] },
+      ]},
+      { key: "ul",      name: "上半身 / 下半身", days: [
+        { name: "Upper（上半身）", muscles: ["chest","lats","frontDelts","rearDelts","traps","biceps","triceps","forearms"] },
+        { name: "Lower（下半身）", muscles: ["quads","hamstrings","glutes","calves","adductors","erectors"] },
+      ]},
+      { key: "fullbody",name: "全身", days: [
+        { name: "Full Body A", muscles: ["chest","lats","quads","frontDelts","biceps"] },
+        { name: "Full Body B", muscles: ["hamstrings","glutes","traps","triceps","abs"] },
+      ]},
+      { key: "bro",     name: "部位別スプリット", days: [
+        { name: "胸",   muscles: ["chest"] },
+        { name: "背中", muscles: ["lats","traps","erectors"] },
+        { name: "肩",   muscles: ["frontDelts","rearDelts"] },
+        { name: "腕",   muscles: ["biceps","triceps","forearms"] },
+        { name: "脚",   muscles: ["quads","hamstrings","glutes","calves","adductors"] },
+      ]},
+    ];
+
+    /* ============================================================
+       PURE HELPERS
+    ============================================================ */
+    const todayStr = () => new Date().toISOString().slice(0, 10);
+    const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+
+    const calcBMR = (p) => {
+      if (p.formula === "katch" && p.bodyFat > 0) {
+        const lbm = p.weight * (1 - p.bodyFat / 100);
+        return 370 + 21.6 * lbm;
+      }
+      const base = 10 * p.weight + 6.25 * p.height - 5 * p.age;
+      return p.sex === "female" ? base - 161 : base + 5;
+    };
+    const calcTDEE = (p) => calcBMR(p) * p.activity;
+    const goalCalories = (p) => {
+      const g = GOALS.find(x => x.key === p.goal) || GOALS[1];
+      return calcTDEE(p) + g.adjust;
+    };
+    const calcMacros = (p) => {
+      const cals = goalCalories(p);
+      const protein = p.weight * p.proteinPerKg;          // g
+      const fat = p.weight * p.fatPerKg;                  // g
+      const proteinCal = protein * 4;
+      const fatCal = fat * 9;
+      const carbCal = Math.max(0, cals - proteinCal - fatCal);
+      const carbs = carbCal / 4;                          // g
+      return {
+        calories: Math.round(cals),
+        protein: Math.round(protein), fat: Math.round(fat), carbs: Math.round(carbs),
+        proteinCal: Math.round(proteinCal), fatCal: Math.round(fatCal), carbCal: Math.round(carbCal),
+      };
+    };
+    const epley1RM = (weight, reps) => reps <= 1 ? weight : weight * (1 + reps / 30);
+
+    const sevenDaysAgo = () => { const d = new Date(); d.setDate(d.getDate() - 6); return d.toISOString().slice(0,10); };
+
+    const weeklyVolumeByMuscle = (logs) => {
+      const since = sevenDaysAgo();
+      const map = {};
+      Object.keys(MUSCLES).forEach(m => map[m] = 0);
+      logs.forEach(l => {
+        if (l.date >= since && map[l.muscle] !== undefined) map[l.muscle] += l.sets.length;
+      });
+      return map;
+    };
+    const volumeZone = (sets, m) => {
+      const def = MUSCLES[m];
+      if (sets < def.mev) return { key: "low",  label: "不足", color: "var(--bad)" };
+      if (sets > def.mrv) return { key: "high", label: "過多", color: "var(--accent-2)" };
+      return { key: "ok", label: "適正", color: "var(--good)" };
+    };
+    const totalVolumeAll = (logs) =>
+      logs.reduce((sum, l) => sum + l.sets.reduce((s, st) => s + st.weight * st.reps, 0), 0);
+    const uniqueWorkoutDays = (logs) => new Set(logs.map(l => l.date)).size;
+
+    const lastTrainedByMuscle = (logs) => {
+      const map = {};
+      logs.forEach(l => { if (!map[l.muscle] || l.date > map[l.muscle]) map[l.muscle] = l.date; });
+      return map;
+    };
+
+    // Gamification: XP from total sets+volume; level thresholds quadratic
+    const xpFromLogs = (logs) => {
+      let xp = 0;
+      logs.forEach(l => { xp += l.sets.length * 12 + Math.round(l.sets.reduce((s,st)=>s+st.weight*st.reps,0) / 50); });
+      return xp;
+    };
+    const levelFromXp = (xp) => Math.floor(0.5 + Math.sqrt(Math.max(0, xp) / 60)) ;
+    const xpForLevel = (lvl) => Math.round(60 * Math.pow(Math.max(0, lvl), 2));
+
+    const computeStreak = (logs) => {
+      const days = [...new Set(logs.map(l => l.date))].sort();
+      if (days.length === 0) return { current: 0, best: 0, last: null };
+      let best = 1, run = 1;
+      for (let i = 1; i < days.length; i++) {
+        if (daysBetween(days[i-1], days[i]) === 1) run++;
+        else run = 1;
+        if (run > best) best = run;
+      }
+      // current streak counted back from today/yesterday
+      const last = days[days.length - 1];
+      const gap = daysBetween(last, todayStr());
+      let current = 0;
+      if (gap <= 1) {
+        current = 1;
+        for (let i = days.length - 1; i > 0; i--) {
+          if (daysBetween(days[i-1], days[i]) === 1) current++;
+          else break;
+        }
+      }
+      return { current, best, last };
+    };
+
+    /* ============================================================
+       DEFAULT STATE + STORAGE (try/catch defended)
+    ============================================================ */
+    const defaultState = () => ({
+      version: APP_VERSION,
+      profile: {
+        sex: "male", age: 28, height: 172, weight: 70, bodyFat: 18,
+        formula: "mifflin", activity: 1.55, goal: "maintain",
+        proteinPerKg: 2.0, fatPerKg: 0.9,
+      },
+      settings: { theme: "dark", defaultRest: 90, sound: true, vibrate: true, split: "ppl" },
+      logs: [
+        // sample seed data (last several days)
+        seedLog(-5, "be_bench", "chest", [[60,10],[60,9],[62.5,8]]),
+        seedLog(-5, "fd_ohp", "frontDelts", [[35,10],[35,8]]),
+        seedLog(-5, "ti_pushdown", "triceps", [[25,12],[25,12],[27.5,10]]),
+        seedLog(-3, "la_latpulldown", "lats", [[50,12],[55,10],[55,9]]),
+        seedLog(-3, "bi_db_curl", "biceps", [[14,12],[14,11]]),
+        seedLog(-1, "qu_squat", "quads", [[80,8],[80,8],[85,6]]),
+        seedLog(-1, "ha_rdl", "hamstrings", [[70,10],[70,10]]),
+        seedLog(-1, "ca_standing", "calves", [[40,15],[40,15],[40,14]]),
+      ],
+      bodyWeightLog: [
+        { date: dShift(-21), weight: 71.2 },
+        { date: dShift(-14), weight: 70.8 },
+        { date: dShift(-7),  weight: 70.4 },
+        { date: dShift(0),   weight: 70.0 },
+      ],
+      todayMenu: [],
+      gamification: { xp: 0, level: 0, current: 0, bestStreak: 0, badges: [] },
+      bests: {}, // exerciseId -> best estimated 1RM
+    });
+    function dShift(days) { const d = new Date(); d.setDate(d.getDate() + days); return d.toISOString().slice(0,10); }
+    function seedLog(days, exerciseId, muscle, setPairs) {
+      return { id: "seed_" + exerciseId + "_" + days, date: dShift(days), exerciseId, muscle,
+        sets: setPairs.map(([weight, reps]) => ({ weight, reps })) };
+    }
+
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (!raw) { const d = defaultState(); return recompute(d); }
+        const parsed = JSON.parse(raw);
+        // shallow merge to tolerate older versions
+        const base = defaultState();
+        const merged = {
+          ...base, ...parsed,
+          profile: { ...base.profile, ...(parsed.profile || {}) },
+          settings: { ...base.settings, ...(parsed.settings || {}) },
+          gamification: { ...base.gamification, ...(parsed.gamification || {}) },
+          logs: Array.isArray(parsed.logs) ? parsed.logs : base.logs,
+          bodyWeightLog: Array.isArray(parsed.bodyWeightLog) ? parsed.bodyWeightLog : base.bodyWeightLog,
+          todayMenu: Array.isArray(parsed.todayMenu) ? parsed.todayMenu : [],
+          bests: parsed.bests || {},
+        };
+        return recompute(merged);
+      } catch (e) {
+        console.warn("localStorage load failed, using defaults", e);
+        return recompute(defaultState());
+      }
+    }
+    function saveState(state) {
+      try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+      catch (e) { console.warn("localStorage save failed", e); }
+    }
+    // recompute derived gamification + bests from logs
+    function recompute(state) {
+      const xp = xpFromLogs(state.logs);
+      const level = levelFromXp(xp);
+      const streak = computeStreak(state.logs);
+      const bests = {};
+      state.logs.forEach(l => {
+        l.sets.forEach(st => {
+          const e = epley1RM(st.weight, st.reps);
+          if (!bests[l.exerciseId] || e > bests[l.exerciseId]) bests[l.exerciseId] = Math.round(e * 10) / 10;
+        });
+      });
+      const earned = BADGES.filter(b => {
+        try { return b.test({ ...state, gamification: { ...state.gamification, level, bestStreak: streak.best } }); }
+        catch { return false; }
+      }).map(b => b.id);
+      return {
+        ...state,
+        bests,
+        gamification: { xp, level, current: streak.current, bestStreak: streak.best, badges: earned },
+      };
+    }
+
+    /* ============================================================
+       SMALL UI PRIMITIVES
+    ============================================================ */
+    function Stepper({ value, onChange, step = 2.5, min = 0, max = 9999, suffix = "" }) {
+      const set = (v) => onChange(Math.max(min, Math.min(max, Math.round(v * 100) / 100)));
+      return (
+        <div className="flex items-center gap-2">
+          <button className="btn btn-ghost stepper-btn" onClick={() => set(value - step)}>−</button>
+          <div className="flex-1 text-center">
+            <input type="number" inputMode="decimal" value={value}
+              onChange={(e) => set(parseFloat(e.target.value) || 0)}
+              className="w-full bg-transparent text-center text-xl font-extrabold outline-none"
+              style={{ color: "var(--text)" }} />
+            {suffix && <span className="text-xs" style={{ color: "var(--text-faint)" }}>{suffix}</span>}
+          </div>
+          <button className="btn btn-ghost stepper-btn" onClick={() => set(value + step)}>＋</button>
+        </div>
+      );
+    }
+
+    function Modal({ open, onClose, title, children }) {
+      if (!open) return null;
+      return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center fade-in"
+          style={{ background: "rgba(0,0,0,0.6)" }} onClick={onClose}>
+          <div className="card glass slide-up w-full sm:max-w-md max-h-[88vh] overflow-y-auto no-scrollbar p-4 m-0 sm:m-4 rounded-b-none sm:rounded-[18px]"
+            onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-extrabold neon-text">{title}</h3>
+              <button className="btn btn-ghost px-3" onClick={onClose}>✕</button>
+            </div>
+            {children}
+          </div>
+        </div>
+      );
+    }
+
+    function Badge({ tone = "default", children }) {
+      const map = {
+        default: { bg: "var(--surface-2)", c: "var(--text-dim)" },
+        cyan: { bg: "rgba(0,229,255,.14)", c: "var(--accent)" },
+        purple: { bg: "rgba(177,77,255,.16)", c: "var(--accent-2)" },
+        good: { bg: "rgba(43,217,159,.16)", c: "var(--good)" },
+        warn: { bg: "rgba(255,176,46,.16)", c: "var(--warn)" },
+        bad: { bg: "rgba(255,77,109,.16)", c: "var(--bad)" },
+      };
+      const s = map[tone] || map.default;
+      return <span className="chip" style={{ background: s.bg, color: s.c, borderColor: "transparent" }}>{children}</span>;
+    }
+
+    /* ============================================================
+       CHARTS (SVG, self-made)
+    ============================================================ */
+    function DonutChart({ segments, size = 180, stroke = 26, center }) {
+      const r = (size - stroke) / 2;
+      const c = 2 * Math.PI * r;
+      const total = segments.reduce((s, x) => s + x.value, 0) || 1;
+      let offset = 0;
+      return (
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--surface-2)" strokeWidth={stroke} />
+          {segments.map((seg, i) => {
+            const len = (seg.value / total) * c;
+            const el = (
+              <circle key={i} cx={size/2} cy={size/2} r={r} fill="none" stroke={seg.color}
+                strokeWidth={stroke} strokeDasharray={`${len} ${c - len}`} strokeDashoffset={-offset}
+                strokeLinecap="butt" transform={`rotate(-90 ${size/2} ${size/2})`} className="ring-progress" />
+            );
+            offset += len;
+            return el;
+          })}
+          {center && (
+            <text x="50%" y="50%" textAnchor="middle" dominantBaseline="central"
+              fill="var(--text)" fontSize="22" fontWeight="800">{center}</text>
+          )}
+        </svg>
+      );
+    }
+
+    function LineChart({ data, height = 160, color = "var(--accent)", unit = "", fmtX }) {
+      const w = 320;
+      const pad = { l: 36, r: 12, t: 14, b: 22 };
+      if (!data || data.length === 0)
+        return <div className="text-center py-8 text-sm" style={{ color: "var(--text-faint)" }}>データがありません</div>;
+      const xs = data.map((_, i) => i);
+      const ys = data.map(d => d.y);
+      const minY = Math.min(...ys), maxY = Math.max(...ys);
+      const rangeY = (maxY - minY) || 1;
+      const plotW = w - pad.l - pad.r, plotH = height - pad.t - pad.b;
+      const X = (i) => pad.l + (data.length === 1 ? plotW/2 : (i / (data.length - 1)) * plotW);
+      const Y = (v) => pad.t + plotH - ((v - minY) / rangeY) * plotH;
+      const pts = data.map((d, i) => `${X(i)},${Y(d.y)}`).join(" ");
+      const area = `${pad.l},${pad.t + plotH} ${pts} ${pad.l + plotW},${pad.t + plotH}`;
+      const gid = "g_" + Math.random().toString(36).slice(2, 7);
+      const ticks = [minY, (minY+maxY)/2, maxY];
+      return (
+        <svg width="100%" viewBox={`0 0 ${w} ${height}`} preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+              <stop offset="100%" stopColor={color} stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          {ticks.map((t, i) => (
+            <g key={i}>
+              <line x1={pad.l} y1={Y(t)} x2={w - pad.r} y2={Y(t)} stroke="var(--border)" strokeWidth="1" strokeDasharray="3 4" />
+              <text x={pad.l - 5} y={Y(t)} textAnchor="end" dominantBaseline="central" fontSize="9" fill="var(--text-faint)">{Math.round(t)}</text>
+            </g>
+          ))}
+          <polygon points={area} fill={`url(#${gid})`} />
+          <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+          {data.map((d, i) => (
+            <circle key={i} cx={X(i)} cy={Y(d.y)} r="3" fill={color} stroke="var(--bg)" strokeWidth="1.5" />
+          ))}
+          {data.map((d, i) => (
+            (i === 0 || i === data.length - 1 || data.length <= 6) &&
+            <text key={"x"+i} x={X(i)} y={height - 6} textAnchor="middle" fontSize="9" fill="var(--text-faint)">
+              {fmtX ? fmtX(d.x) : d.x}
+            </text>
+          ))}
+        </svg>
+      );
+    }
+
+    /* ============================================================
+       BODY MAP
+    ============================================================ */
+    function BodyFigure({ side, volMap, selected, onSelect }) {
+      const paths = side === "front" ? FRONT_PATHS : BACK_PATHS;
+      const muscleFill = (m) => {
+        const sets = volMap[m] || 0;
+        const z = volumeZone(sets, m);
+        if (selected === m) return "var(--accent)";
+        if (sets === 0) return "rgba(120,128,170,0.30)";
+        return z.color;
+      };
+      const renderMuscle = (key, p) => {
+        const isSel = selected === key;
+        const common = {
+          className: "muscle" + (isSel ? " muscle-selected pulse-glow" : ""),
+          fill: muscleFill(key),
+          fillOpacity: isSel ? 0.95 : 0.62,
+          stroke: isSel ? "var(--accent)" : "var(--border)",
+          strokeWidth: isSel ? 1.4 : 0.8,
+          onClick: () => onSelect(key),
+        };
+        return (
+          <g key={key}>
+            <path d={p.d} {...common} />
+            {p.mirror && <path d={p.d} {...common} transform="translate(200,0) scale(-1,1)" />}
+          </g>
+        );
+      };
+      return (
+        <svg viewBox="0 0 200 440" width="100%" style={{ maxHeight: "52vh" }} className="mx-auto block">
+          {/* silhouette */}
+          <g fill="var(--surface-2)" stroke="var(--border)" strokeWidth="1">
+            <circle cx="100" cy="30" r="19" />
+            <rect x="92" y="46" width="16" height="14" rx="6" />
+            <path d="M62,64 C80,56 120,56 138,64 C150,70 150,120 144,150 L120,186 L80,186 L56,150 C50,120 50,70 62,64 Z" />
+            {/* arms */}
+            <path d="M58,70 C44,80 40,120 38,150 C36,170 34,184 40,188 C48,188 50,172 54,150 C58,120 62,92 66,78 Z" />
+            <path d="M142,70 C156,80 160,120 162,150 C164,170 166,184 160,188 C152,188 150,172 146,150 C142,120 138,92 134,78 Z" />
+            {/* legs */}
+            <path d="M82,188 L118,188 C120,210 118,240 116,270 L112,360 C111,390 108,408 102,408 C97,408 96,390 95,360 L94,300 L92,360 C91,390 88,408 84,408 C78,408 77,390 78,360 L82,250 C81,220 80,206 82,188 Z" />
+          </g>
+          {Object.entries(paths).map(([k, p]) => renderMuscle(k, p))}
+        </svg>
+      );
+    }
+
+    function BodyMapTab({ state, setState, openExercise }) {
+      const [side, setSide] = useState("front");
+      const [selected, setSelected] = useState(null);
+      const volMap = useMemo(() => weeklyVolumeByMuscle(state.logs), [state.logs]);
+      const lastMap = useMemo(() => lastTrainedByMuscle(state.logs), [state.logs]);
+
+      const sideMuscles = Object.entries(MUSCLES).filter(([_, m]) => m.side === side || m.side === "both");
+      const selMuscle = selected ? MUSCLES[selected] : null;
+      const selExercises = selected ? EXERCISE_DB.filter(e => e.muscle === selected) : [];
+
+      const addToMenu = (id) => {
+        if (state.todayMenu.includes(id)) return;
+        setState(s => ({ ...s, todayMenu: [...s.todayMenu, id] }));
+      };
+
+      return (
+        <div className="p-4 pb-28 fade-in">
+          <Header sub="筋肉をタップして種目を表示" title="ボディマップ" state={state} />
+
+          {/* front/back toggle */}
+          <div className="flex gap-2 mb-3 p-1 rounded-2xl" style={{ background: "var(--surface)" }}>
+            {[["front","前面"],["back","背面"]].map(([k, label]) => (
+              <button key={k} onClick={() => { setSide(k); setSelected(null); }}
+                className="btn flex-1 py-2"
+                style={ side === k
+                  ? { background: "linear-gradient(135deg, var(--accent), var(--accent-2))", color: "#04121a" }
+                  : { background: "transparent", color: "var(--text-dim)" } }>
+                {label}
+              </button>
+            ))}
+          </div>
+
+          <div className="card p-3 mb-3">
+            <BodyFigure side={side} volMap={volMap} selected={selected} onSelect={setSelected} />
+            <div className="flex justify-center gap-3 mt-1 text-[11px]" style={{ color: "var(--text-faint)" }}>
+              <span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--bad)" }}></i>不足</span>
+              <span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--good)" }}></i>適正</span>
+              <span className="flex items-center gap-1"><i className="w-3 h-3 rounded-full inline-block" style={{ background: "var(--accent-2)" }}></i>過多</span>
+            </div>
+          </div>
+
+          {/* muscle volume list */}
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            {sideMuscles.map(([k, m]) => {
+              const sets = volMap[k] || 0;
+              const z = volumeZone(sets, k);
+              const last = lastMap[k];
+              const ago = last ? daysBetween(last, todayStr()) : null;
+              return (
+                <button key={k} onClick={() => setSelected(k)}
+                  className="card p-3 text-left"
+                  style={ selected === k ? { borderColor: "var(--accent)", boxShadow: "var(--glow)" } : {} }>
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sm">{m.ja}</span>
+                    <i className="w-2.5 h-2.5 rounded-full" style={{ background: z.color }}></i>
+                  </div>
+                  <div className="text-xs mt-1" style={{ color: "var(--text-dim)" }}>
+                    今週 <b style={{ color: "var(--text)" }}>{sets}</b> / 推奨 {m.mev}〜{m.mav} セット
+                  </div>
+                  <div className="text-[11px] mt-0.5" style={{ color: "var(--text-faint)" }}>
+                    {ago === null ? "未トレーニング" : ago === 0 ? "今日" : `${ago}日前`}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* exercises slide-up */}
+          {selMuscle && (
+            <div className="card p-4 slide-up" style={{ borderColor: "var(--accent)" }}>
+              <div className="flex items-center justify-between mb-2">
+                <div>
+                  <h3 className="text-lg font-extrabold neon-text">{selMuscle.ja}</h3>
+                  <p className="text-xs" style={{ color: "var(--text-faint)" }}>{selMuscle.en} の種目</p>
+                </div>
+                <Badge tone="cyan">{selExercises.length} 種目</Badge>
+              </div>
+              <div className="space-y-2">
+                {selExercises.map(e => (
+                  <div key={e.id} className="rounded-xl p-3" style={{ background: "var(--surface-2)" }}>
+                    <div className="flex items-center justify-between">
+                      <button className="text-left flex-1" onClick={() => openExercise(e)}>
+                        <div className="font-bold text-sm">{e.nameJa}</div>
+                        <div className="text-[11px]" style={{ color: "var(--text-faint)" }}>{e.nameEn}</div>
+                      </button>
+                      <button className="btn btn-primary px-3 py-1.5 text-xs ml-2" onClick={() => addToMenu(e.id)}>
+                        {state.todayMenu.includes(e.id) ? "追加済" : "＋メニュー"}
+                      </button>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      <Badge tone={e.type === "compound" ? "purple" : "default"}>{e.type === "compound" ? "コンパウンド" : "アイソレーション"}</Badge>
+                      <Badge>{equipLabel(e.equipment)}</Badge>
+                      <Badge tone="warn">{levelLabel(e.level)}</Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      );
+    }
+
+    const equipLabel = (e) => ({ barbell:"バーベル", dumbbell:"ダンベル", machine:"マシン", cable:"ケーブル", bodyweight:"自重" }[e] || e);
+    const levelLabel = (l) => ({ beginner:"初級", intermediate:"中級", advanced:"上級" }[l] || l);
+
+    /* ============================================================
+       EXERCISE DETAIL MODAL
+    ============================================================ */
+    function ExerciseDetail({ exercise, onClose, onAddMenu, inMenu, onLog }) {
+      if (!exercise) return null;
+      const e = exercise;
+      return (
+        <Modal open={!!exercise} onClose={onClose} title={e.nameJa}>
+          <p className="text-xs mb-3" style={{ color: "var(--text-faint)" }}>{e.nameEn} ・ {MUSCLES[e.muscle].ja}</p>
+          <div className="flex flex-wrap gap-1.5 mb-3">
+            <Badge tone={e.type === "compound" ? "purple" : "default"}>{e.type === "compound" ? "コンパウンド" : "アイソレーション"}</Badge>
+            <Badge>{equipLabel(e.equipment)}</Badge>
+            <Badge tone="warn">{levelLabel(e.level)}</Badge>
+          </div>
+          <Section title="主働筋・協働筋">
+            <p className="text-sm"><b>主働筋:</b> {e.primary}</p>
+            <p className="text-sm"><b>協働筋:</b> {e.secondary}</p>
+          </Section>
+          <Section title="推奨セット × レップ（目的別）">
+            <div className="space-y-1 text-sm">
+              <div className="flex justify-between"><span style={{color:"var(--text-dim)"}}>筋力</span><b>{e.reps.strength}</b></div>
+              <div className="flex justify-between"><span style={{color:"var(--text-dim)"}}>筋肥大</span><b>{e.reps.hypertrophy}</b></div>
+              <div className="flex justify-between"><span style={{color:"var(--text-dim)"}}>筋持久力</span><b>{e.reps.endurance}</b></div>
+            </div>
+          </Section>
+          <Section title="フォームのコツ"><p className="text-sm" style={{ color: "var(--good)" }}>✅ {e.tips}</p></Section>
+          <Section title="よくあるミス"><p className="text-sm" style={{ color: "var(--bad)" }}>⚠️ {e.mistakes}</p></Section>
+          <div className="flex gap-2 mt-4">
+            <button className="btn btn-ghost flex-1 py-3" onClick={() => onAddMenu(e.id)}>
+              {inMenu ? "メニュー追加済" : "＋ 今日のメニュー"}
+            </button>
+            <button className="btn btn-primary flex-1 py-3" onClick={() => onLog(e)}>記録する</button>
+          </div>
+        </Modal>
+      );
+    }
+    function Section({ title, children }) {
+      return (
+        <div className="mb-3">
+          <h4 className="text-xs font-bold mb-1" style={{ color: "var(--accent)" }}>{title}</h4>
+          <div className="rounded-xl p-3" style={{ background: "var(--surface-2)" }}>{children}</div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       LOG / RECORD MODAL  (sets + rest timer + 1RM)
+    ============================================================ */
+    function LogModal({ exercise, state, setState, onClose, onCelebrate }) {
+      const prevBest = exercise ? (state.bests[exercise.id] || 0) : 0;
+      const [sets, setSets] = useState([{ weight: 40, reps: 10 }]);
+      const [rest, setRest] = useState(state.settings.defaultRest);
+      const [remaining, setRemaining] = useState(0);
+      const [running, setRunning] = useState(false);
+      const intervalRef = useRef(null);
+
+      useEffect(() => {
+        if (!running) return;
+        intervalRef.current = setInterval(() => {
+          setRemaining(r => {
+            if (r <= 1) { clearInterval(intervalRef.current); setRunning(false); fireAlarm(state.settings); return 0; }
+            return r - 1;
+          });
+        }, 1000);
+        return () => clearInterval(intervalRef.current);
+      }, [running]);
+
+      if (!exercise) return null;
+      const e = exercise;
+      const startRest = () => { setRemaining(rest); setRunning(true); };
+      const stopRest = () => { setRunning(false); clearInterval(intervalRef.current); };
+
+      const updateSet = (i, key, val) => setSets(s => s.map((x, idx) => idx === i ? { ...x, [key]: val } : x));
+      const addSet = () => setSets(s => [...s, { ...s[s.length - 1] }]);
+      const removeSet = (i) => setSets(s => s.length > 1 ? s.filter((_, idx) => idx !== i) : s);
+
+      const bestThisSession = Math.max(0, ...sets.map(s => epley1RM(s.weight, s.reps)));
+      const isPR = bestThisSession > prevBest && prevBest > 0;
+
+      const save = () => {
+        const entry = { id: "log_" + Date.now(), date: todayStr(), exerciseId: e.id, muscle: e.muscle,
+          sets: sets.map(s => ({ weight: +s.weight || 0, reps: +s.reps || 0 })) };
+        setState(s => recompute({ ...s, logs: [...s.logs, entry] }));
+        if (bestThisSession > prevBest) onCelebrate(`新記録! 推定1RM ${Math.round(bestThisSession*10)/10}kg 🎉`);
+        onClose();
+      };
+
+      return (
+        <Modal open={!!exercise} onClose={onClose} title={"記録: " + e.nameJa}>
+          {/* rest timer */}
+          <div className="card p-3 mb-3 text-center" style={{ background: "var(--surface-2)" }}>
+            <div className="text-xs mb-1" style={{ color: "var(--text-dim)" }}>レストタイマー</div>
+            <div className="text-4xl font-black neon-text mb-2" style={{ color: running ? "var(--accent)" : "var(--text)" }}>
+              {fmtTime(running ? remaining : rest)}
+            </div>
+            <div className="flex items-center gap-2 justify-center mb-2">
+              {[60,90,120,180].map(t => (
+                <button key={t} onClick={() => setRest(t)} className="chip"
+                  style={ rest === t ? { background: "var(--accent)", color: "#04121a" } : { color: "var(--text-dim)" } }>
+                  {t}s
+                </button>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              {!running
+                ? <button className="btn btn-primary flex-1 py-2" onClick={startRest}>スタート</button>
+                : <button className="btn btn-ghost flex-1 py-2" onClick={stopRest}>停止</button>}
+            </div>
+          </div>
+
+          {/* sets */}
+          <div className="space-y-2 mb-3">
+            <div className="grid grid-cols-[28px_1fr_1fr_44px] gap-2 text-[11px] px-1" style={{ color: "var(--text-faint)" }}>
+              <span>#</span><span className="text-center">重量(kg)</span><span className="text-center">レップ</span><span></span>
+            </div>
+            {sets.map((s, i) => (
+              <div key={i} className="grid grid-cols-[28px_1fr_1fr_44px] gap-2 items-center">
+                <span className="text-center font-bold" style={{ color: "var(--accent)" }}>{i + 1}</span>
+                <Stepper value={s.weight} step={2.5} onChange={(v) => updateSet(i, "weight", v)} />
+                <Stepper value={s.reps} step={1} min={0} onChange={(v) => updateSet(i, "reps", v)} />
+                <button className="btn btn-ghost stepper-btn" onClick={() => removeSet(i)} style={{ color: "var(--bad)" }}>✕</button>
+              </div>
+            ))}
+            <button className="btn btn-ghost w-full py-2 text-sm" onClick={addSet}>＋ セット追加</button>
+          </div>
+
+          {/* 1RM estimate */}
+          <div className="card p-3 mb-3 flex items-center justify-between" style={{ background: "var(--surface-2)" }}>
+            <div>
+              <div className="text-xs" style={{ color: "var(--text-dim)" }}>推定1RM（Epley式）</div>
+              <div className="text-2xl font-black" style={{ color: isPR ? "var(--good)" : "var(--text)" }}>
+                {Math.round(bestThisSession * 10) / 10} <span className="text-sm">kg</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs" style={{ color: "var(--text-faint)" }}>自己ベスト</div>
+              <div className="text-lg font-bold">{prevBest || "—"} kg</div>
+              {isPR && <Badge tone="good">PR更新!</Badge>}
+            </div>
+          </div>
+
+          <button className="btn btn-primary w-full py-3" onClick={save}>保存する</button>
+        </Modal>
+      );
+    }
+    const fmtTime = (s) => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
+    function fireAlarm(settings) {
+      try { if (settings.vibrate && navigator.vibrate) navigator.vibrate([200,100,200]); } catch {}
+      try {
+        if (settings.sound) {
+          const ctx = new (window.AudioContext || window.webkitAudioContext)();
+          const o = ctx.createOscillator(), g = ctx.createGain();
+          o.connect(g); g.connect(ctx.destination);
+          o.type = "sine"; o.frequency.value = 880;
+          g.gain.setValueAtTime(0.001, ctx.currentTime);
+          g.gain.exponentialRampToValueAtTime(0.3, ctx.currentTime + 0.02);
+          g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.6);
+          o.start(); o.stop(ctx.currentTime + 0.6);
+        }
+      } catch {}
+    }
+
+    /* ============================================================
+       RECORD TAB (today's menu + quick log + history)
+    ============================================================ */
+    function RecordTab({ state, setState, openLog, openExercise }) {
+      const menu = state.todayMenu.map(id => EXERCISE_DB.find(e => e.id === id)).filter(Boolean);
+      const removeMenu = (id) => setState(s => ({ ...s, todayMenu: s.todayMenu.filter(x => x !== id) }));
+      const recentLogs = [...state.logs].sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id)).slice(0, 20);
+
+      return (
+        <div className="p-4 pb-28 fade-in">
+          <Header title="記録" sub="今日のメニューとセット記録" state={state} />
+
+          <div className="card p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="font-extrabold">今日のメニュー</h3>
+              <Badge tone="cyan">{menu.length} 種目</Badge>
+            </div>
+            {menu.length === 0
+              ? <p className="text-sm text-center py-4" style={{ color: "var(--text-faint)" }}>ボディマップから種目を追加してください</p>
+              : (
+                <div className="space-y-2">
+                  {menu.map(e => (
+                    <div key={e.id} className="flex items-center gap-2 rounded-xl p-3" style={{ background: "var(--surface-2)" }}>
+                      <button className="flex-1 text-left" onClick={() => openExercise(e)}>
+                        <div className="font-bold text-sm">{e.nameJa}</div>
+                        <div className="text-[11px]" style={{ color: "var(--text-faint)" }}>{MUSCLES[e.muscle].ja}</div>
+                      </button>
+                      <button className="btn btn-primary px-3 py-2 text-xs" onClick={() => openLog(e)}>記録</button>
+                      <button className="btn btn-ghost px-3 py-2 text-xs" onClick={() => removeMenu(e.id)}>✕</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+          </div>
+
+          <div className="card p-4">
+            <h3 className="font-extrabold mb-2">最近の記録</h3>
+            {recentLogs.length === 0
+              ? <p className="text-sm text-center py-4" style={{ color: "var(--text-faint)" }}>記録がありません</p>
+              : (
+                <div className="space-y-2">
+                  {recentLogs.map(l => {
+                    const e = EXERCISE_DB.find(x => x.id === l.exerciseId);
+                    const vol = l.sets.reduce((s, st) => s + st.weight * st.reps, 0);
+                    const best = Math.max(0, ...l.sets.map(st => epley1RM(st.weight, st.reps)));
+                    return (
+                      <div key={l.id} className="rounded-xl p-3" style={{ background: "var(--surface-2)" }}>
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-sm">{e ? e.nameJa : l.exerciseId}</span>
+                          <span className="text-[11px]" style={{ color: "var(--text-faint)" }}>{l.date}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {l.sets.map((st, i) => (
+                            <span key={i} className="chip text-[11px]" style={{ background: "var(--surface)", color: "var(--text-dim)" }}>
+                              {st.weight}kg×{st.reps}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="text-[11px] mt-1.5" style={{ color: "var(--text-faint)" }}>
+                          総量 {Math.round(vol)}kg ・ 推定1RM {Math.round(best*10)/10}kg
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+          </div>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       NUTRITION TAB
+    ============================================================ */
+    function NutritionTab({ state, setState }) {
+      const p = state.profile;
+      const up = (key, val) => setState(s => ({ ...s, profile: { ...s.profile, [key]: val } }));
+      const macros = useMemo(() => calcMacros(p), [p]);
+      const bmr = Math.round(calcBMR(p));
+      const tdee = Math.round(calcTDEE(p));
+
+      return (
+        <div className="p-4 pb-28 fade-in">
+          <Header title="栄養" sub="BMR・TDEE・PFC計算" state={state} />
+
+          <div className="card p-4 mb-4 space-y-3">
+            <h3 className="font-extrabold">プロフィール</h3>
+            <div className="flex gap-2">
+              {[["male","男性"],["female","女性"]].map(([k,l]) => (
+                <button key={k} onClick={() => up("sex", k)} className="btn flex-1 py-2"
+                  style={ p.sex === k ? { background: "var(--accent)", color: "#04121a" } : { background: "var(--surface-2)", color: "var(--text-dim)" } }>{l}</button>
+              ))}
+            </div>
+            <Field label="年齢"><Stepper value={p.age} step={1} min={10} max={100} onChange={(v) => up("age", v)} suffix="歳" /></Field>
+            <Field label="身長"><Stepper value={p.height} step={1} min={120} max={230} onChange={(v) => up("height", v)} suffix="cm" /></Field>
+            <Field label="体重"><Stepper value={p.weight} step={0.5} min={30} max={250} onChange={(v) => up("weight", v)} suffix="kg" /></Field>
+
+            <div>
+              <label className="text-xs" style={{ color: "var(--text-dim)" }}>計算式</label>
+              <div className="flex gap-2 mt-1">
+                {[["mifflin","Mifflin-St Jeor"],["katch","Katch-McArdle"]].map(([k,l]) => (
+                  <button key={k} onClick={() => up("formula", k)} className="btn flex-1 py-2 text-xs"
+                    style={ p.formula === k ? { background: "var(--accent-2)", color: "#fff" } : { background: "var(--surface-2)", color: "var(--text-dim)" } }>{l}</button>
+                ))}
+              </div>
+            </div>
+            {p.formula === "katch" && (
+              <Field label="体脂肪率"><Stepper value={p.bodyFat} step={0.5} min={3} max={60} onChange={(v) => up("bodyFat", v)} suffix="%" /></Field>
+            )}
+
+            <div>
+              <label className="text-xs" style={{ color: "var(--text-dim)" }}>活動レベル</label>
+              <select value={p.activity} onChange={(e) => up("activity", parseFloat(e.target.value))}
+                className="w-full mt-1 rounded-xl p-3 text-sm outline-none"
+                style={{ background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--border)" }}>
+                {ACTIVITY_LEVELS.map(a => <option key={a.v} value={a.v}>{a.label}（×{a.v}）</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className="text-xs" style={{ color: "var(--text-dim)" }}>目標</label>
+              <div className="flex gap-2 mt-1">
+                {GOALS.map(g => (
+                  <button key={g.key} onClick={() => up("goal", g.key)} className="btn flex-1 py-2 text-sm"
+                    style={ p.goal === g.key ? { background: g.color, color: "#04121a" } : { background: "var(--surface-2)", color: "var(--text-dim)" } }>{g.label}</button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* results */}
+          <div className="card p-4 mb-4">
+            <div className="grid grid-cols-3 gap-2 text-center mb-4">
+              <Stat label="BMR" value={bmr} unit="kcal" />
+              <Stat label="TDEE" value={tdee} unit="kcal" />
+              <Stat label="目標" value={macros.calories} unit="kcal" highlight />
+            </div>
+
+            <div className="flex items-center gap-4">
+              <DonutChart size={150} stroke={24}
+                center={macros.calories + ""}
+                segments={[
+                  { value: macros.proteinCal, color: "var(--accent)" },
+                  { value: macros.fatCal, color: "var(--warn)" },
+                  { value: macros.carbCal, color: "var(--accent-2)" },
+                ]} />
+              <div className="flex-1 space-y-2">
+                <MacroRow color="var(--accent)" label="タンパク質" g={macros.protein} kcal={macros.proteinCal} />
+                <MacroRow color="var(--warn)" label="脂質" g={macros.fat} kcal={macros.fatCal} />
+                <MacroRow color="var(--accent-2)" label="炭水化物" g={macros.carbs} kcal={macros.carbCal} />
+              </div>
+            </div>
+          </div>
+
+          {/* macro sliders */}
+          <div className="card p-4 space-y-4">
+            <h3 className="font-extrabold">マクロ調整</h3>
+            <SliderRow label="タンパク質" value={p.proteinPerKg} min={1.6} max={2.2} step={0.1}
+              onChange={(v) => up("proteinPerKg", v)} suffix={`g/kg（${Math.round(p.weight*p.proteinPerKg)}g）`} />
+            <SliderRow label="脂質" value={p.fatPerKg} min={0.8} max={1.0} step={0.05}
+              onChange={(v) => up("fatPerKg", v)} suffix={`g/kg（${Math.round(p.weight*p.fatPerKg)}g）`} />
+            <p className="text-[11px]" style={{ color: "var(--text-faint)" }}>炭水化物は残りカロリーから自動算出されます。</p>
+          </div>
+        </div>
+      );
+    }
+    function Field({ label, children }) {
+      return (<div><label className="text-xs" style={{ color: "var(--text-dim)" }}>{label}</label><div className="mt-1">{children}</div></div>);
+    }
+    function Stat({ label, value, unit, highlight }) {
+      return (
+        <div className="rounded-xl p-2" style={{ background: highlight ? "rgba(0,229,255,.12)" : "var(--surface-2)" }}>
+          <div className="text-[11px]" style={{ color: "var(--text-faint)" }}>{label}</div>
+          <div className="text-xl font-black" style={{ color: highlight ? "var(--accent)" : "var(--text)" }}>{value}</div>
+          <div className="text-[10px]" style={{ color: "var(--text-faint)" }}>{unit}</div>
+        </div>
+      );
+    }
+    function MacroRow({ color, label, g, kcal }) {
+      return (
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-2 text-sm"><i className="w-3 h-3 rounded-full" style={{ background: color }}></i>{label}</span>
+          <span className="text-sm font-bold">{g}g <span className="text-[11px]" style={{ color: "var(--text-faint)" }}>({kcal}kcal)</span></span>
+        </div>
+      );
+    }
+    function SliderRow({ label, value, min, max, step, onChange, suffix }) {
+      return (
+        <div>
+          <div className="flex justify-between text-sm mb-1">
+            <span style={{ color: "var(--text-dim)" }}>{label}</span>
+            <b>{suffix}</b>
+          </div>
+          <input type="range" min={min} max={max} step={step} value={value}
+            onChange={(e) => onChange(parseFloat(e.target.value))}
+            className="w-full" style={{ accentColor: "var(--accent)" }} />
+        </div>
+      );
+    }
+
+    /* ============================================================
+       PROGRESS TAB
+    ============================================================ */
+    function ProgressTab({ state, setState }) {
+      const exIds = useMemo(() => [...new Set(state.logs.map(l => l.exerciseId))], [state.logs]);
+      const [selEx, setSelEx] = useState(exIds[0] || "");
+      useEffect(() => { if (!exIds.includes(selEx)) setSelEx(exIds[0] || ""); }, [exIds.join(",")]);
+
+      // 1RM trend per selected exercise (best per day)
+      const oneRmData = useMemo(() => {
+        const byDay = {};
+        state.logs.filter(l => l.exerciseId === selEx).forEach(l => {
+          const best = Math.max(0, ...l.sets.map(s => epley1RM(s.weight, s.reps)));
+          byDay[l.date] = Math.max(byDay[l.date] || 0, best);
+        });
+        return Object.keys(byDay).sort().map(d => ({ x: d.slice(5), y: Math.round(byDay[d]*10)/10 }));
+      }, [state.logs, selEx]);
+
+      // weekly total volume (last 8 weeks)
+      const volData = useMemo(() => {
+        const weeks = {};
+        state.logs.forEach(l => {
+          const wk = weekKey(l.date);
+          const vol = l.sets.reduce((s, st) => s + st.weight * st.reps, 0);
+          weeks[wk] = (weeks[wk] || 0) + vol;
+        });
+        return Object.keys(weeks).sort().slice(-8).map(w => ({ x: w.slice(5), y: Math.round(weeks[w]) }));
+      }, [state.logs]);
+
+      const bwData = useMemo(() =>
+        [...state.bodyWeightLog].sort((a,b) => a.date.localeCompare(b.date)).map(b => ({ x: b.date.slice(5), y: b.weight })),
+        [state.bodyWeightLog]);
+
+      const [bw, setBw] = useState(state.profile.weight);
+      const logBodyWeight = () => {
+        const entry = { date: todayStr(), weight: +bw };
+        setState(s => ({
+          ...s,
+          bodyWeightLog: [...s.bodyWeightLog.filter(x => x.date !== todayStr()), entry],
+          profile: { ...s.profile, weight: +bw },
+        }));
+      };
+
+      // recovery indicators
+      const lastMap = useMemo(() => lastTrainedByMuscle(state.logs), [state.logs]);
+
+      return (
+        <div className="p-4 pb-28 fade-in">
+          <Header title="進捗" sub="1RM・ボリューム・体重の推移" state={state} />
+
+          <div className="card p-4 mb-4">
+            <h3 className="font-extrabold mb-2">推定1RM 推移</h3>
+            <select value={selEx} onChange={(e) => setSelEx(e.target.value)}
+              className="w-full mb-2 rounded-xl p-2.5 text-sm outline-none"
+              style={{ background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--border)" }}>
+              {exIds.length === 0 && <option>記録なし</option>}
+              {exIds.map(id => { const e = EXERCISE_DB.find(x => x.id === id); return <option key={id} value={id}>{e ? e.nameJa : id}</option>; })}
+            </select>
+            <LineChart data={oneRmData} color="var(--accent)" unit="kg" />
+          </div>
+
+          <div className="card p-4 mb-4">
+            <h3 className="font-extrabold mb-2">週間総ボリューム（kg）</h3>
+            <LineChart data={volData} color="var(--accent-2)" unit="kg" />
+          </div>
+
+          <div className="card p-4 mb-4">
+            <h3 className="font-extrabold mb-2">体重推移</h3>
+            <LineChart data={bwData} color="var(--good)" unit="kg" />
+            <div className="flex items-end gap-2 mt-3">
+              <div className="flex-1"><Field label="今日の体重"><Stepper value={bw} step={0.1} min={30} max={250} onChange={setBw} suffix="kg" /></Field></div>
+              <button className="btn btn-primary px-4 py-3" onClick={logBodyWeight}>記録</button>
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <h3 className="font-extrabold mb-2">筋肉別 回復インジケーター</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {Object.entries(MUSCLES).map(([k, m]) => {
+                const last = lastMap[k];
+                const ago = last ? daysBetween(last, todayStr()) : null;
+                const recovered = ago === null ? null : ago >= 2;
+                return (
+                  <div key={k} className="flex items-center justify-between rounded-xl p-2.5" style={{ background: "var(--surface-2)" }}>
+                    <span className="text-sm">{m.ja}</span>
+                    <span className="text-xs font-bold" style={{ color: ago === null ? "var(--text-faint)" : recovered ? "var(--good)" : "var(--warn)" }}>
+                      {ago === null ? "—" : ago === 0 ? "今日" : `${ago}日前`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    }
+    function weekKey(dateStr) {
+      const d = new Date(dateStr);
+      const day = (d.getDay() + 6) % 7; // Monday=0
+      d.setDate(d.getDate() - day);
+      return d.toISOString().slice(0, 10);
+    }
+
+    /* ============================================================
+       SETTINGS TAB (program, gamification, data, theme)
+    ============================================================ */
+    function SettingsTab({ state, setState, applyTheme }) {
+      const g = state.gamification;
+      const nextLvlXp = xpForLevel(g.level + 1);
+      const curLvlXp = xpForLevel(g.level);
+      const pct = Math.max(0, Math.min(100, ((g.xp - curLvlXp) / (nextLvlXp - curLvlXp || 1)) * 100));
+      const split = SPLITS.find(s => s.key === state.settings.split) || SPLITS[0];
+      const fileRef = useRef(null);
+
+      const setSetting = (key, val) => setState(s => ({ ...s, settings: { ...s.settings, [key]: val } }));
+
+      const exportData = () => {
+        try {
+          const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          a.href = url; a.download = `muscleforge_backup_${todayStr()}.json`;
+          a.click(); URL.revokeObjectURL(url);
+        } catch (e) { alert("エクスポートに失敗しました"); }
+      };
+      const importData = (file) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          try {
+            const parsed = JSON.parse(reader.result);
+            setState(recompute({ ...defaultState(), ...parsed,
+              profile: { ...defaultState().profile, ...(parsed.profile||{}) },
+              settings: { ...defaultState().settings, ...(parsed.settings||{}) },
+            }));
+            applyTheme((parsed.settings && parsed.settings.theme) || "dark");
+            alert("インポートしました");
+          } catch (e) { alert("無効なJSONファイルです"); }
+        };
+        reader.readAsText(file);
+      };
+      const resetAll = () => {
+        if (confirm("全データを削除して初期化しますか？")) {
+          const d = recompute(defaultState());
+          setState(d); applyTheme(d.settings.theme);
+        }
+      };
+
+      const volMap = useMemo(() => weeklyVolumeByMuscle(state.logs), [state.logs]);
+
+      return (
+        <div className="p-4 pb-28 fade-in">
+          <Header title="設定" sub="プログラム・実績・データ管理" state={state} />
+
+          {/* gamification */}
+          <div className="card p-4 mb-4">
+            <div className="flex items-center justify-between mb-2">
+              <div>
+                <div className="text-xs" style={{ color: "var(--text-faint)" }}>レベル</div>
+                <div className="text-3xl font-black neon-text">Lv. {g.level}</div>
+              </div>
+              <div className="text-right">
+                <div className="text-xs" style={{ color: "var(--text-faint)" }}>連続記録</div>
+                <div className="text-2xl font-black" style={{ color: "var(--warn)" }}>🔥 {g.current}日</div>
+                <div className="text-[11px]" style={{ color: "var(--text-faint)" }}>最高 {g.bestStreak}日</div>
+              </div>
+            </div>
+            <div className="w-full h-3 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
+              <div className="h-full ring-progress" style={{ width: pct + "%", background: "linear-gradient(90deg, var(--accent), var(--accent-2))" }}></div>
+            </div>
+            <div className="text-[11px] mt-1 text-right" style={{ color: "var(--text-faint)" }}>
+              {g.xp} / {nextLvlXp} XP（次のレベルまで {Math.max(0, nextLvlXp - g.xp)}）
+            </div>
+          </div>
+
+          {/* badges */}
+          <div className="card p-4 mb-4">
+            <h3 className="font-extrabold mb-2">実績バッジ</h3>
+            <div className="grid grid-cols-2 gap-2">
+              {BADGES.map(b => {
+                const earned = g.badges.includes(b.id);
+                return (
+                  <div key={b.id} className="rounded-xl p-3 flex items-center gap-2"
+                    style={{ background: "var(--surface-2)", opacity: earned ? 1 : 0.4 }}>
+                    <span className="text-2xl">{b.icon}</span>
+                    <div>
+                      <div className="text-sm font-bold">{b.name}</div>
+                      <div className="text-[10px]" style={{ color: "var(--text-faint)" }}>{b.desc}</div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* program / volume */}
+          <div className="card p-4 mb-4">
+            <h3 className="font-extrabold mb-2">トレーニングプログラム</h3>
+            <select value={state.settings.split} onChange={(e) => setSetting("split", e.target.value)}
+              className="w-full mb-3 rounded-xl p-2.5 text-sm outline-none"
+              style={{ background: "var(--surface-2)", color: "var(--text)", border: "1px solid var(--border)" }}>
+              {SPLITS.map(s => <option key={s.key} value={s.key}>{s.name}</option>)}
+            </select>
+            <div className="space-y-2">
+              {split.days.map((day, i) => (
+                <div key={i} className="rounded-xl p-3" style={{ background: "var(--surface-2)" }}>
+                  <div className="font-bold text-sm mb-1" style={{ color: "var(--accent)" }}>{day.name}</div>
+                  <div className="flex flex-wrap gap-1">
+                    {day.muscles.map(m => <Badge key={m}>{MUSCLES[m].ja}</Badge>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* volume landmarks */}
+          <div className="card p-4 mb-4">
+            <h3 className="font-extrabold mb-1">週間ボリューム（MEV/MAV/MRV）</h3>
+            <p className="text-[11px] mb-2" style={{ color: "var(--text-faint)" }}>
+              MEV 最低効果 / MAV 最大適応 / MRV 最大回復可能ボリューム
+            </p>
+            <div className="space-y-1.5">
+              {Object.entries(MUSCLES).map(([k, m]) => {
+                const sets = volMap[k] || 0;
+                const z = volumeZone(sets, k);
+                const w = Math.min(100, (sets / (m.mrv + 4)) * 100);
+                return (
+                  <div key={k}>
+                    <div className="flex justify-between text-[11px]">
+                      <span>{m.ja}</span>
+                      <span style={{ color: z.color }}>{sets} セット・{z.label}</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "var(--surface-2)" }}>
+                      <div className="h-full" style={{ width: w + "%", background: z.color }}></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* timer / theme settings */}
+          <div className="card p-4 mb-4 space-y-3">
+            <h3 className="font-extrabold">アプリ設定</h3>
+            <Field label="デフォルトレスト時間">
+              <Stepper value={state.settings.defaultRest} step={15} min={15} max={600} onChange={(v) => setSetting("defaultRest", v)} suffix="秒" />
+            </Field>
+            <ToggleRow label="タイマー音" value={state.settings.sound} onChange={(v) => setSetting("sound", v)} />
+            <ToggleRow label="バイブレーション" value={state.settings.vibrate} onChange={(v) => setSetting("vibrate", v)} />
+            <ToggleRow label="ライトモード" value={state.settings.theme === "light"}
+              onChange={(v) => { const t = v ? "light" : "dark"; setSetting("theme", t); applyTheme(t); }} />
+          </div>
+
+          {/* data management */}
+          <div className="card p-4 mb-4 space-y-2">
+            <h3 className="font-extrabold mb-1">データ管理</h3>
+            <button className="btn btn-ghost w-full py-3" onClick={exportData}>📤 データをエクスポート（JSON）</button>
+            <button className="btn btn-ghost w-full py-3" onClick={() => fileRef.current.click()}>📥 データをインポート（JSON）</button>
+            <input ref={fileRef} type="file" accept="application/json" className="hidden"
+              onChange={(e) => { if (e.target.files[0]) importData(e.target.files[0]); e.target.value = ""; }} />
+            <button className="btn w-full py-3" style={{ background: "rgba(255,77,109,.15)", color: "var(--bad)" }} onClick={resetAll}>🗑 全データをリセット</button>
+          </div>
+
+          <div className="text-center text-[11px]" style={{ color: "var(--text-faint)" }}>
+            MUSCLE FORGE v{APP_VERSION}
+          </div>
+        </div>
+      );
+    }
+    function ToggleRow({ label, value, onChange }) {
+      return (
+        <div className="flex items-center justify-between">
+          <span className="text-sm">{label}</span>
+          <button onClick={() => onChange(!value)} className="w-12 h-7 rounded-full transition-colors relative"
+            style={{ background: value ? "var(--accent)" : "var(--surface-2)" }}>
+            <span className="absolute top-0.5 w-6 h-6 rounded-full bg-white transition-all" style={{ left: value ? "22px" : "2px" }}></span>
+          </button>
+        </div>
+      );
+    }
+
+    /* ============================================================
+       SHARED HEADER + NAV + APP
+    ============================================================ */
+    function Header({ title, sub, state }) {
+      const g = state.gamification;
+      return (
+        <div className="flex items-end justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-black neon-text">{title}</h1>
+            <p className="text-xs" style={{ color: "var(--text-faint)" }}>{sub}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Badge tone="purple">Lv.{g.level}</Badge>
+            <Badge tone="warn">🔥{g.current}</Badge>
+          </div>
+        </div>
+      );
+    }
+
+    const TABS = [
+      { key: "body", label: "ボディ", icon: "🫀" },
+      { key: "record", label: "記録", icon: "📝" },
+      { key: "nutrition", label: "栄養", icon: "🥗" },
+      { key: "progress", label: "進捗", icon: "📈" },
+      { key: "settings", label: "設定", icon: "⚙️" },
+    ];
+
+    function Toast({ msg }) {
+      if (!msg) return null;
+      return (
+        <div className="fixed left-1/2 -translate-x-1/2 z-[70] pop"
+          style={{ bottom: "92px" }}>
+          <div className="card glass px-5 py-3 font-bold text-center" style={{ borderColor: "var(--good)", color: "var(--good)" }}>
+            {msg}
+          </div>
+        </div>
+      );
+    }
+
+    function App() {
+      const [state, setStateRaw] = useState(loadState);
+      const [tab, setTab] = useState("body");
+      const [detailEx, setDetailEx] = useState(null);
+      const [logEx, setLogEx] = useState(null);
+      const [toast, setToast] = useState("");
+      const prevBadges = useRef(state.gamification.badges);
+
+      const setState = useCallback((updater) => {
+        setStateRaw(prev => {
+          const next = typeof updater === "function" ? updater(prev) : updater;
+          saveState(next);
+          return next;
+        });
+      }, []);
+
+      const applyTheme = useCallback((theme) => {
+        document.documentElement.setAttribute("data-theme", theme);
+      }, []);
+
+      useEffect(() => { applyTheme(state.settings.theme); }, []);
+
+      // celebrate newly earned badges
+      useEffect(() => {
+        const newly = state.gamification.badges.filter(b => !prevBadges.current.includes(b));
+        if (newly.length > 0) {
+          const b = BADGES.find(x => x.id === newly[newly.length - 1]);
+          if (b) celebrate(`実績解除: ${b.icon} ${b.name}`);
+        }
+        prevBadges.current = state.gamification.badges;
+      }, [state.gamification.badges.join(",")]);
+
+      const celebrate = (msg) => { setToast(msg); setTimeout(() => setToast(""), 2600); };
+
+      const openExercise = (e) => setDetailEx(e);
+      const openLog = (e) => { setDetailEx(null); setLogEx(e); };
+      const addToMenu = (id) => setState(s => s.todayMenu.includes(id) ? s : ({ ...s, todayMenu: [...s.todayMenu, id] }));
+
+      return (
+        <div className="app-bg min-h-screen">
+          <div className="max-w-md mx-auto relative">
+            {tab === "body" && <BodyMapTab state={state} setState={setState} openExercise={openExercise} />}
+            {tab === "record" && <RecordTab state={state} setState={setState} openLog={openLog} openExercise={openExercise} />}
+            {tab === "nutrition" && <NutritionTab state={state} setState={setState} />}
+            {tab === "progress" && <ProgressTab state={state} setState={setState} />}
+            {tab === "settings" && <SettingsTab state={state} setState={setState} applyTheme={applyTheme} />}
+          </div>
+
+          <Toast msg={toast} />
+
+          <ExerciseDetail exercise={detailEx} onClose={() => setDetailEx(null)}
+            onAddMenu={(id) => { addToMenu(id); celebrate("メニューに追加しました"); }}
+            inMenu={detailEx ? state.todayMenu.includes(detailEx.id) : false}
+            onLog={openLog} />
+
+          <LogModal exercise={logEx} state={state} setState={setState}
+            onClose={() => setLogEx(null)} onCelebrate={celebrate} />
+
+          {/* bottom nav */}
+          <nav className="fixed bottom-0 left-0 right-0 z-40 glass border-t" style={{ borderColor: "var(--border)", paddingBottom: "env(safe-area-inset-bottom)" }}>
+            <div className="max-w-md mx-auto grid grid-cols-5">
+              {TABS.map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)}
+                  className="flex flex-col items-center justify-center py-2.5 gap-0.5"
+                  style={{ minHeight: "56px", color: tab === t.key ? "var(--accent)" : "var(--text-faint)" }}>
+                  <span className="text-xl" style={ tab === t.key ? { filter: "drop-shadow(0 0 6px var(--accent))" } : {} }>{t.icon}</span>
+                  <span className="text-[10px] font-bold">{t.label}</span>
+                </button>
+              ))}
+            </div>
+          </nav>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+  </script>
+</body>
+</html>
