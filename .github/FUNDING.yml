@@ -1,0 +1,7 @@
+# GitHub リポジトリ上部に "Sponsor" ボタンを表示するための設定。
+# 使うものだけ行頭の「# 」を外し、自分のIDに置き換えてください（反映に数分）。
+#
+# github: yourname            # GitHub Sponsors（要セットアップ: https://github.com/sponsors）
+# ko_fi: yourname             # Ko-fi（https://ko-fi.com/yourname の "yourname"）
+# buy_me_a_coffee: yourname   # Buy Me a Coffee
+# custom: ["https://www.paypal.me/yourname"]

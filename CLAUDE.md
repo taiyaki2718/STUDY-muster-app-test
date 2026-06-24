@@ -8,7 +8,7 @@
 「GoalFlow: Holographic OS」── 目標管理 + 集中タイマー + フラッシュカードを
 ホログラフィックUI（リキッド・グラスモーフィズム）でまとめた、**完全オフライン対応の
 学習計画 PWA**。元リポジトリ名は `STUDY-muster-app-test`（勉強計画アプリ）。
-開発者表記は「たいやき」、アプリ内バージョンは `v1.2.1`。
+開発者表記は「たいやき」、アプリ内バージョンは `v1.2.2`。
 
 ## 2. 技術スタック（コードから確認済み・推測なし）
 
@@ -165,6 +165,14 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / SET_IDENTITY / COMPLETE_ONBOARDING / IM
 - proxy 実体は `ai-proxy/worker.js`（CORS制限・`max_tokens`上限）＋ `ai-proxy/README.md`（デプロイ手順）。
 - 設計判断: コードに鍵直書きは公開リポで危険のため禁止。「利用者ゼロ設定」を満たすには
   オーナーが一度proxyをデプロイ（鍵はサーバー側）。利用料はオーナー負担、悪用対策を同梱。
+
+### ✅ 収益化＝寄付/サポート方式（v1.2.2）
+- 方針: **全機能無料のまま**、押し付けない「応援(寄付)」導線のみ（North Star: ダークパターン禁止）。
+- `SUPPORT`（Ko-fi/BMC/GitHub Sponsors/PayPal のURL）を入れると、Settings に「応援する」ボタンが出る
+  （未設定の項目は非表示＝壊れない）。`.github/FUNDING.yml` で GitHub の Sponsor ボタンも対応。
+- `supportLinks()` が設定済みリンクだけを返す。手順は `MONETIZE.md`。
+- 注意: 寄付は機能をゲートしない。AIコーチは実費が出るため、寄付方式では **BYOK 維持を推奨**
+  （proxyで全員無料配布するとオーナー負担）。将来フリーミアム化する場合は Worker でライセンス検証。
 
 ### ✅ フェーズ「オートプラン — キー不要の自動カレンダー割り当て」で追加（v1.2.0）
 - **APIキー不要**の決定論的スケジューラ `planGoal`/`planTaskDates`：目標＋期限＋頻度
