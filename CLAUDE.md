@@ -8,7 +8,7 @@
 「GoalFlow: Holographic OS」── 目標管理 + 集中タイマー + フラッシュカードを
 ホログラフィックUI（リキッド・グラスモーフィズム）でまとめた、**完全オフライン対応の
 学習計画 PWA**。元リポジトリ名は `STUDY-muster-app-test`（勉強計画アプリ）。
-開発者表記は「たいやき」、アプリ内バージョンは `v1.2.2`。
+開発者表記は「たいやき」、アプリ内バージョンは `v1.3.0`。
 
 ## 2. 技術スタック（コードから確認済み・推測なし）
 
@@ -18,12 +18,12 @@
   **esm.sh の CDN から ESM 直読み込み**（初回オンライン時のみ取得、以降は SW がキャッシュ）。
 - TypeScript なし。Lint/Formatter なし。純ロジックの回帰テストは `tests/*.test.mjs`（Nodeのみ）。
 - **バックエンドなし・認証なし。** すべてクライアント完結。
-- **AIコーチ**: Anthropic Claude API を**ブラウザから直接**呼ぶ（SDK不使用、生 `fetch`）。
-  モデル `claude-opus-4-8`、`anthropic-version: 2023-06-01`、CORS用に
-  `anthropic-dangerous-direct-browser-access: true`。目標分解は構造化出力
-  (`output_config.format` の json_schema) で安全にJSONパース。**BYOK**: ユーザーが自分の
-  APIキーを設定（バックエンド無し・静的・プライバシーの設計を維持）。`ClaudeAPI`/`ApiKeyStore`
-  はモジュールレベル。鍵が無い/オフラインでもアプリ本体は壊れない（優雅な劣化）。
+- **AIは撤去（v1.3.0）**: 高度なAIが既に普及し差別化にならない判断で、AIコーチ(Claude API/BYOK/proxy)を
+  全削除。目標分解はAI不要の決定論的スケジューラ `planGoal`（オートプラン）に一本化。
+- **収益化＝フリーミアム（Pro: 月額/年額）**: 課金は外部サービス(Lemon Squeezy等)。購入時の
+  **ライセンス鍵**をアプリで検証して Pro を解放（`validateLicense`/`interpretLicense`、`ProStore` は
+  reducer 外の localStorage）。Pro機能はAIではない付加価値＝**プレミアムテーマ(アクセントカラー)** 等。
+  無料版は全機能維持（North Star: ダークパターン禁止）。設定は `PRO`(購入URL/価格/検証URL)。手順は `MONETIZE.md`。
 - **状態管理**: `useReducer` + 単一 `reducer`。`localStorage`（キー `goalflow:v22:holo`）に
   500ms デバウンスで永続化。起動時に復元。
 - **PWA**: `manifest.webmanifest`（installable, standalone, portrait, theme `#060B14`）+
@@ -55,16 +55,15 @@
 `Ctx`（Preact Context）が `{ state, dispatch, addToast }` を供給。`App` が
 `useReducer` を保持し、タブで View を切替（フルページ遷移、ルータなし）。
 
-タブ（`TABS` / `VIEWS`）: 9画面
+タブ（`TABS` / `VIEWS`）: 8画面（v1.3.0でAIコーチ撤去）
 1. **home** (`Home`) — Goal Core。時計・なりたい自分・レベル/XP/ストリーク・今日のタスク・目標カード。
 2. **calendar** (`Calendar`) — 月カレンダー + 月間目標 + サブタスク（回路に同期）+ 日次タスク（if-then きっかけ入力）。
 3. **maps** (`CircuitMap`) — 「思考回路」= 目標のツリー(マインドマップ)を自動レイアウト描画。
-4. **goals** (`Goals`) — 戦略目標（タイトル+期限、任意 metric）。
+4. **goals** (`Goals`) — 戦略目標（タイトル+期限、任意 metric）+ **オートプラン**（目標→カレンダー自動割当, `AutoPlanModal`）。
 5. **timer** (`Timer`) — 水位アニメの集中タイマー + Zen 全画面 + 環境音。
 6. **cards** (`Cards`) — フラッシュカード（SM-2 間隔反復、検索/カテゴリ/タグ）。
 7. **insight** (`Insight`) — 解析（累計集中時間・XP・ストリーク・週次バー）。
-8. **coach** (`Coach`) — AIコーチ（BYOK）。目標分解（思考回路/タスクに接続）+ つまずき診断/振り返りの対話。
-9. **settings** (`Settings`) — APIキー・identity・音量・JSON エクスポート/インポート・バージョン。
+8. **settings** (`Settings`) — プラン(Pro)・アクセントカラー(Pro)・identity・音量・JSON エクスポート/インポート・応援・バージョン。
 
 共通: 右上テーマトグル（dark/light）、下部フローティングナビ、トースト。
 
@@ -72,7 +71,8 @@
 
 ```
 state = {
-  settings: { theme:'dark'|'light', soundVolume:0..1, bgmPreset:'rain' },
+  settings: { theme:'dark'|'light', soundVolume:0..1, bgmPreset:'rain', accent?:'cyan'|'amber'|'violet'|'emerald'|'rose' },
+  // Pro課金状態は reducer 外。localStorage `goalflow:pro` に { active, plan, key, checkedAt }（エクスポート非含有）
   goals:   [{ id, title, deadline, metric?:{done,target,unit?} }], // metric は Goals で設定/増減可
   tasks:   [{ id, title, date:'YYYY-MM-DD', done:bool, cue?:string }], // cue = if-then きっかけ
   monthGoals: { [YYYY-MM]: { title, subtasks:[{ id, title, taskId?|nodeId? }] } },
@@ -144,7 +144,17 @@ SET_ACTIVE_TIMER_TARGET / SET_SETTINGS / SET_IDENTITY / COMPLETE_ONBOARDING / IM
 - `shouldOnboard()` で既存ユーザーにはオンボーディングを出さない。
 - テスト `tests/onboarding.test.mjs`（15件）。
 
-### ✅ フェーズ「差別化 — AIコーチ」で追加
+### ✅ AIコーチ撤去 + フリーミアム(Pro 月額/年額)導入（v1.3.0・現行方針）
+- **AIコーチ(Coachタブ/ClaudeAPI/ApiKeyStore/AI_PROXY_URL/ai-proxy/coach系テスト)を全削除**。
+  理由: 高度なAIが既に普及し差別化にならない。目標分解は `planGoal`（オートプラン, AI不要）に一本化。
+- **Pro(有料)**: `PRO`(monthlyUrl/annualUrl/価格/validateUrl), `ProStore`(localStorage), `isProActive`,
+  `interpretLicense`(Lemon Squeezy応答判定), `validateLicense`(ブラウザ直検証), `effectiveAccent`。
+  `UpgradeModal`(月額/年額カード+ライセンス鍵有効化)。起動時にベストエフォート再検証(無効確定時のみ解除)。
+- **Pro機能#1 = プレミアムテーマ**: アクセントカラー5種(`ACCENTS`, `[data-accent=...]` CSS)。無料はcyan固定。
+- 倫理: 無料版は全機能維持・ペイウォールは閉じられる・ダークパターン無し。`tests/pro.test.mjs`(13件)。
+- ⚠️ 以下「差別化 — AIコーチ」〜「収益化＝寄付」の各節は**履歴**（v1.3.0で撤去/置換済み）。
+
+### ✅ フェーズ「差別化 — AIコーチ」で追加（※v1.3.0で撤去）
 - AIコーチ（`Coach` タブ）= Claude API(BYOK)。**目標分解**（具体化→マイルストーン→今週の行動
   →今日の2分の一歩+if-thenきっかけ、構造化出力）を既存のタスク/目標に1タップで反映。
   **対話コーチ**（つまずき診断・振り返り・壁打ち、状況の要約のみ送信）。

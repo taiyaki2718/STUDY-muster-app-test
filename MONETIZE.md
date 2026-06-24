@@ -1,57 +1,61 @@
-# 収益化（寄付/サポート方式）セットアップ
+# 収益化（フリーミアム: Pro 月額 / 年額）セットアップ
 
-このアプリは **全機能を無料**のまま、押し付けない「応援（寄付）」導線だけを置く方針です
-（North Star: ダークパターン・課金ゲート・罪悪感商法は禁止）。
-設定すると **設定タブに「応援する」ボタン**が出て、GitHubには「Sponsor」ボタンが出ます。
+方針: **基本機能はずっと無料**、AIではない付加価値（プレミアムテーマ等）を **Pro（有料サブスク）** にする。
+無料版は全機能維持・ペイウォールは閉じられる（North Star: ダークパターン禁止）。
+
+仕組み: 決済は外部サービスが担当し、**購入時に「ライセンス鍵」が発行される** → アプリがその鍵を
+**ライセンス検証APIで確認**して Pro を解放（バックエンド不要、ブラウザから直接検証）。
 
 ---
 
-## 1. 受け取り口を1つ作る（5〜10分・どれか1つでOK）
+## 1. 決済サービスを用意（おすすめ: Lemon Squeezy）
 
-| サービス | 特徴 | 作る場所 |
-|---|---|---|
-| **Ko-fi**（おすすめ） | 手数料ほぼ0、単発チップ＋月額メンバー対応、国際対応 | https://ko-fi.com |
-| Buy Me a Coffee | 同様、UIが軽い | https://www.buymeacoffee.com |
-| GitHub Sponsors | 開発者向け。要審査・銀行登録 | https://github.com/sponsors |
-| PayPal.me | 既にPayPalがあれば最速 | https://paypal.me |
+Lemon Squeezy は個人開発者向けで、**消費税/VATを代行（merchant of record）**、**月額/年額サブスク**、
+**ライセンス鍵＋検証API** を備えています。
 
-> まずは **Ko-fi か PayPal.me** が最短です。アカウントを作ると `https://ko-fi.com/あなた` のような
-> URL（または `あなた` というID）が手に入ります。
+1. https://lemonsqueezy.com で登録 → Store を作成
+2. **Product** を作成（例: "GoalFlow Pro"）。**Variants** で2つの価格を用意：
+   - **Monthly**（例 ¥480/月）
+   - **Annual**（例 ¥3,800/年）
+   - 各 Variant の **License keys** を有効化（購入時に鍵を発行する設定）
+3. それぞれの **購入URL（Buy link / Checkout URL）** を控える（月額用・年額用）
 
-## 2. アプリに反映する（2か所・任意）
+> Gumroad でも同様（サブスク＋ライセンス）。Stripe単体はサブスク可だが検証にWebhook/簡易backendが要るので、
+> バックエンド無しを保つなら Lemon Squeezy / Gumroad が手軽です。
 
-### (a) アプリ内「応援する」ボタン
-`index.html` の先頭付近にある `SUPPORT` に、作ったURLを入れてコミット＝公開：
+## 2. アプリに反映（`index.html` 先頭付近の `PRO`）
+
 ```js
-const SUPPORT = {
-  kofi:   'https://ko-fi.com/yourname',
-  bmac:   '',
-  github: '',
-  paypal: 'https://www.paypal.me/yourname'
+const PRO = {
+  monthlyUrl: 'https://your-store.lemonsqueezy.com/buy/xxxx-monthly',
+  annualUrl:  'https://your-store.lemonsqueezy.com/buy/xxxx-annual',
+  monthlyPrice: '¥480 / 月',
+  annualPrice:  '¥3,800 / 年',
+  annualSave:   '2ヶ月分お得（約34% OFF）',
+  validateUrl:  'https://api.lemonsqueezy.com/v1/licenses/validate'  // Lemon Squeezy のライセンス検証API
 };
 ```
-- 入れた項目だけボタンが表示されます（空はゼロ表示なので壊れません）。
-- 自分で編集せず、URLを開発担当に伝えてもらえれば設定します。
+- これで「設定 → Pro にアップグレード」に **月額/年額カード**が出て、購入後に届くライセンス鍵で有効化できます。
+- 価格表記（`monthlyPrice` 等）は表示用。実際の課金額は決済サービス側の設定が正です。
+- 自分で編集せず、URL類を開発担当に伝えてもらえれば設定します。
 
-### (b) GitHubの「Sponsor」ボタン
-`.github/FUNDING.yml` の該当行の「# 」を外してIDを入れる：
-```yaml
-ko_fi: yourname
-# custom: ["https://www.paypal.me/yourname"]
-```
+## 3. 動作と注意
 
-## 3. AIコーチのコストについて（重要）
+- **検証**: `validateUrl` に `{ "license_key": "..." }` をPOSTし、`valid` と `license_key.status==='active'` を確認。
+  サブスク解約/期限切れで status が変わると Pro は自動的に外れます（起動時にベストエフォート再検証）。
+- **オフライン/検証エラー時**は Pro 状態を維持（誤って無料化しない）。「無効」が確定した時だけ解除。
+- **CORS**: ブラウザから検証APIを直接呼びます。もし将来 CORS で弾かれる場合は、ごく薄い中継（Cloudflare Worker）を
+  挟めばOK（`validateUrl` をその中継URLに変えるだけ）。
+- **クライアント側の限界**: テーマ等ローカル機能のゲートはコピーで回避可能ですが、誠実なユーザーは購入します。
+  本当に厳密に守りたい高価値機能が出てきたら、サーバー検証必須の設計（Worker）に寄せます。
 
-寄付方式は**機能をゲートしません**。一方 AIコーチ（Claude API）はオーナーに**実費**が発生します。
-- **推奨**：AIは **BYOK**（各利用者が自分のキーを入れる）のままにする（= `AI_PROXY_URL` は空）。
-  これならオーナーにAI費用はかかりません。寄付は「アプリ全体への応援」になります。
-- proxy（`AI_PROXY_URL`）を設定して全員に無料でAIを出す場合、**AI費用はオーナー負担**です。
-  `ai-proxy/worker.js` の `MAX_TOKENS_CAP` と Cloudflare の Rate Limiting で上限を必ず設定してください。
-  寄付がAI費用を上回る保証はないため、少額から様子見を推奨します。
+## 4. Pro機能の増やし方
+
+`isProActive(pro)` が Pro 判定。新しい有料機能はこのフラグでゲートし、無料には影響させない（無料を削らない）。
+現状の Pro 機能はプレミアムテーマ（アクセントカラー）。今後候補: 詳細解析、テーマ追加、エクスポート形式 等。
 
 ---
 
-## 補足：もっと収益化したくなったら
-寄付では物足りなくなった場合、将来的に「フリーミアム（AIコーチを有料Pro化）」へ拡張できます。
-その場合は Lemon Squeezy 等のライセンス鍵を `ai-proxy/worker.js` で検証して AI をゲートします
-（設計済みの拡張ポイント）。必要になったら相談してください。
+## 補足: 寄付/サポート（任意・併用可）
+`SUPPORT`（Ko-fi / Buy Me a Coffee / GitHub Sponsors / PayPal の各URL）を入れると、設定に「応援する」ボタン、
+`.github/FUNDING.yml` で GitHub の Sponsor ボタンも出せます（未設定の項目は非表示）。サブスクと併用できます。

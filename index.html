@@ -64,9 +64,34 @@
   --glow-cyan: 0 0 20px rgba(79, 209, 197, 0.3);
   --glow-blue: 0 0 25px rgba(77, 154, 236, 0.35);
 
-  --text-cyan: #285E61; 
+  --text-cyan: #285E61;
   --text-glow-cyan: none;
 }
+
+/* Pro: アクセントカラー（プレミアムテーマ）。--holo-cyan/--holo-blue/glow/text-cyan を上書き。
+   標準(cyan)は上書きなし。両テーマで読める中間トーンを採用。 */
+[data-accent="amber"]   { --holo-cyan:#F6AD55; --holo-blue:#ED8936; --glow-cyan:0 0 20px rgba(246,173,85,.5); --glow-blue:0 0 30px rgba(237,137,54,.6); --text-cyan:#C05621; }
+[data-accent="violet"]  { --holo-cyan:#B794F4; --holo-blue:#9F7AEA; --glow-cyan:0 0 20px rgba(183,148,244,.5); --glow-blue:0 0 30px rgba(159,122,234,.6); --text-cyan:#6B46C1; }
+[data-accent="emerald"] { --holo-cyan:#68D391; --holo-blue:#38A169; --glow-cyan:0 0 20px rgba(104,211,145,.5); --glow-blue:0 0 30px rgba(56,161,105,.6); --text-cyan:#276749; }
+[data-accent="rose"]    { --holo-cyan:#FC8181; --holo-blue:#F56565; --glow-cyan:0 0 20px rgba(252,129,129,.5); --glow-blue:0 0 30px rgba(245,101,101,.6); --text-cyan:#C53030; }
+[data-theme="dark"][data-accent="amber"]   { --text-cyan:#F6AD55; }
+[data-theme="dark"][data-accent="violet"]  { --text-cyan:#B794F4; }
+[data-theme="dark"][data-accent="emerald"] { --text-cyan:#68D391; }
+[data-theme="dark"][data-accent="rose"]    { --text-cyan:#FC8181; }
+/* スウォッチ表示用 */
+.swatch-row { display:flex; gap:10px; flex-wrap:wrap; }
+.swatch { width:40px; height:40px; border-radius:50%; cursor:pointer; border:2px solid transparent; display:grid; place-items:center; color:#fff; background:linear-gradient(135deg, var(--sw1), var(--sw2)); transition:0.2s; }
+.swatch.is-on { border-color:var(--text-main); transform:scale(1.08); }
+.swatch[disabled] { opacity:0.5; cursor:not-allowed; }
+.swatch-cyan{--sw1:#4FD1C5;--sw2:#4D9AEC} .swatch-amber{--sw1:#F6AD55;--sw2:#ED8936} .swatch-violet{--sw1:#B794F4;--sw2:#9F7AEA} .swatch-emerald{--sw1:#68D391;--sw2:#38A169} .swatch-rose{--sw1:#FC8181;--sw2:#F56565}
+
+/* Pro バッジ / ロック表示 */
+.pro-badge { display:inline-flex; align-items:center; gap:4px; font-size:0.65rem; font-weight:800; letter-spacing:0.08em; padding:3px 8px; border-radius:99px; background:linear-gradient(135deg,#F6AD55,#ED8936); color:#fff; }
+.pro-lock { display:flex; align-items:center; gap:8px; font-size:0.85rem; color:var(--text-muted); }
+.plan-card { border:1px solid var(--glass-border); border-radius:16px; padding:16px; background:rgba(0,0,0,0.15); }
+[data-theme="light"] .plan-card { background:rgba(255,255,255,0.6); }
+.plan-card.is-best { border-color:var(--holo-cyan); box-shadow:var(--glow-cyan); }
+.plan-price { font-family:var(--font-mono); font-size:1.3rem; font-weight:700; color:var(--text-cyan); text-shadow:var(--text-glow-cyan); }
 
 /* Reset & Mobile Bounce Lock */
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -577,7 +602,8 @@ const ICONS = {
   message: () => html`<path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/>`,
   send: () => html`<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`,
   heart: () => html`<path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/>`,
-  coffee: () => html`<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>`
+  coffee: () => html`<path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/>`,
+  lock: () => html`<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>`
 };
 
 function Icon({ n, size = 20 }) {
@@ -684,29 +710,6 @@ const AudioEngine = (() => {
   };
 })();
 
-/* ============================================================
-   AI Coach — BYOK (Bring Your Own Key) Claude API client
-   - APIキーは reducer state ではなく専用の localStorage キーに保存する。
-     こうすることで Settings の JSON エクスポートに鍵が混入しない（プライバシー）。
-   - ブラウザから api.anthropic.com を直接呼ぶ（バックエンド無しの設計を維持）。
-     CORS のため anthropic-dangerous-direct-browser-access ヘッダが必要。
-   - 鍵が無い/オフライン/エラーでもアプリ本体は壊れない（優雅な劣化）。
-   ============================================================ */
-const APIKEY_STORE = 'goalflow:anthropic_key';
-const ApiKeyStore = {
-  get() { try { return localStorage.getItem(APIKEY_STORE) || ''; } catch (e) { return ''; } },
-  set(v) { try { v ? localStorage.setItem(APIKEY_STORE, v) : localStorage.removeItem(APIKEY_STORE); } catch (e) {} },
-  has() { return !!this.get(); }
-};
-
-/* AIコーチのバックエンドproxy URL。
-   ここに自分の Cloudflare Worker 等のURLを入れて公開すると、
-   アプリ利用者は「APIキー入力なし」でAIコーチを使える（鍵はサーバー秘密で保持）。
-   空のままなら従来どおり BYOK（各自のキー）にフォールバックする。
-   例: const AI_PROXY_URL = 'https://goalflow-ai.example.workers.dev';
-   ※このURL自体は秘密ではない（秘密の鍵はproxyサーバー側に置く）。デプロイ手順は ai-proxy/README.md。 */
-const AI_PROXY_URL = '';
-
 /* 応援（寄付）リンク。オーナーが自分のアカウントURLを入れると、設定画面に「応援する」
    ボタンが表示される（未設定の項目は非表示）。全て任意・押し付けない方針（North Star）。
    作り方は MONETIZE.md を参照。例:
@@ -729,180 +732,55 @@ function supportLinks() {
   ].filter(l => l.url && /^https?:\/\//.test(l.url));
 }
 
-const ClaudeAPI = (() => {
-  const ENDPOINT = 'https://api.anthropic.com/v1/messages';
-  const MODEL = 'claude-opus-4-8';
+/* ============================================================
+   Pro（有料プラン）— 月額 / 年額のサブスク
+   - 決済は外部サービス（Lemon Squeezy 等）。購入時に発行される「ライセンス鍵」を
+     アプリで検証して Pro 機能を解放する。バックエンド無しで動くよう、検証は
+     ライセンス検証APIをブラウザから直接呼ぶ（鍵に秘密は不要）。
+   - Pro機能はAIではない付加価値（プレミアムテーマ等）。無料版は全機能維持。
+   設定: PRO.monthlyUrl / annualUrl（購入URL）, PRO.validateUrl（検証API）。手順は MONETIZE.md。
+   ============================================================ */
+const PRO = {
+  monthlyUrl: '',                 // 月額プランの購入URL
+  annualUrl: '',                  // 年額プランの購入URL
+  monthlyPrice: '¥480 / 月',
+  annualPrice: '¥3,800 / 年',
+  annualSave: '2ヶ月分お得（約34% OFF）',
+  validateUrl: ''                 // 例: 'https://api.lemonsqueezy.com/v1/licenses/validate'
+};
+const ACCENTS = [
+  { id: 'cyan',    label: 'シアン（標準）', free: true },
+  { id: 'amber',   label: 'アンバー' },
+  { id: 'violet',  label: 'バイオレット' },
+  { id: 'emerald', label: 'エメラルド' },
+  { id: 'rose',    label: 'ローズ' }
+];
 
-  // proxy があれば proxy 経由（鍵不要）。無ければ各自の鍵で直接 Anthropic を叩く。
-  function usingProxy() { return !!AI_PROXY_URL; }
-  function available() { return usingProxy() || ApiKeyStore.has(); }
-  function buildReq(body, stream) {
-    const payload = JSON.stringify({ model: MODEL, ...(stream ? { stream: true } : {}), ...body });
-    if (usingProxy()) {
-      return { url: AI_PROXY_URL, init: { method: 'POST', headers: { 'content-type': 'application/json' }, body: payload } };
-    }
-    const key = ApiKeyStore.get();
-    if (!key) { const e = new Error('APIキーが未設定です'); e.code = 'NO_KEY'; throw e; }
-    return { url: ENDPOINT, init: { method: 'POST', headers: {
-      'content-type': 'application/json',
-      'x-api-key': key,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true'
-    }, body: payload } };
-  }
-
-  async function call(body) {
-    const { url, init } = buildReq(body, false);
-    let res;
-    try {
-      res = await fetch(url, init);
-    } catch (netErr) {
-      const e = new Error('通信に失敗しました（オフラインの可能性）'); e.code = 'NETWORK'; throw e;
-    }
-    if (!res.ok) {
-      let msg = `エラー (HTTP ${res.status})`;
-      try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
-      if (res.status === 401) msg = usingProxy() ? 'AIサーバーの認証に失敗しました（管理者の設定をご確認ください）。' : 'APIキーが無効です。設定を確認してください。';
-      const e = new Error(msg); e.code = 'HTTP'; e.status = res.status; throw e;
-    }
-    return res.json();
-  }
-
-  // SSE ストリーミング呼び出し。content_block_delta の text_delta を順次 onDelta に渡し、
-  // 最終的な全文を返す。SDK 不使用のため fetch の ReadableStream を自前でパースする。
-  async function callStream(body, onDelta) {
-    const { url, init } = buildReq(body, true);
-    let res;
-    try {
-      res = await fetch(url, init);
-    } catch (netErr) {
-      const e = new Error('通信に失敗しました（オフラインの可能性）'); e.code = 'NETWORK'; throw e;
-    }
-    if (!res.ok) {
-      let msg = `エラー (HTTP ${res.status})`;
-      try { const j = await res.json(); if (j && j.error && j.error.message) msg = j.error.message; } catch (e) {}
-      if (res.status === 401) msg = usingProxy() ? 'AIサーバーの認証に失敗しました（管理者の設定をご確認ください）。' : 'APIキーが無効です。設定を確認してください。';
-      const e = new Error(msg); e.code = 'HTTP'; e.status = res.status; throw e;
-    }
-    if (!res.body || !res.body.getReader) {
-      // ストリーム非対応環境向けフォールバック（テキストを丸ごと読む）。
-      const txt = await res.text();
-      let full = '';
-      txt.split('\n').forEach(line => {
-        line = line.trim();
-        if (!line.startsWith('data:')) return;
-        try { const ev = JSON.parse(line.slice(5).trim()); if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') { full += ev.delta.text; if (onDelta) onDelta(full); } } catch (e) {}
-      });
-      return full;
-    }
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '', full = '';
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      let idx;
-      while ((idx = buffer.indexOf('\n')) >= 0) {
-        const line = buffer.slice(0, idx).trim();
-        buffer = buffer.slice(idx + 1);
-        if (!line.startsWith('data:')) continue;
-        const payload = line.slice(5).trim();
-        if (!payload || payload === '[DONE]') continue;
-        let ev;
-        try { ev = JSON.parse(payload); } catch (e) { continue; }
-        if (ev.type === 'content_block_delta' && ev.delta && ev.delta.type === 'text_delta') {
-          full += ev.delta.text;
-          if (onDelta) onDelta(full);
-        } else if (ev.type === 'error') {
-          const e = new Error((ev.error && ev.error.message) || 'ストリーミングエラー'); e.code = 'STREAM'; throw e;
-        }
-      }
-    }
-    return full;
-  }
-
-  function textOf(data) {
-    const b = (data && data.content || []).find(x => x.type === 'text');
-    return b ? b.text : '';
-  }
-
-  const DECOMP_SYS =
-    'あなたは行動科学に基づく目標達成コーチです。ユーザーの目標を、達成しやすい構造へ分解します。' +
-    '根拠: 目標設定理論(Locke & Latham、具体的で挑戦的)、目標の階層分解(目標→マイルストーン→今週の行動→今日の2分の一歩)、' +
-    '実行意図/if-then(Gollwitzer)、2分ルール(Fogg)。' +
-    '出力は必ず指定のJSONスキーマに厳密に従い、日本語で、具体的かつ実行可能に。' +
-    'today_step は「2分でできる」極小の一歩にし、cue は「Xしたら」の形の実行のきっかけにする。' +
-    '励ましは短く、罪悪感を与えない。';
-
-  const CHAT_SYS =
-    'あなたは行動科学に基づく目標達成コーチです。壁打ち・具体化・つまずきの診断と再起動・振り返りを行います。' +
-    '責めず、共感的に、そして実用的に。つまずいた時はハードルを下げた次の一歩を一緒に見つけます。' +
-    '簡潔に日本語で答え、必要なら具体的な「次の2分の一歩」を提案します。' +
-    'ダークパターン・通知スパム・依存や罪悪感を煽る発言はしません。ユーザーの長期的な幸福を最優先します。';
-
-  return {
-    available, usingProxy,
-    async decompose({ title, deadline, identity }) {
-      const schema = {
-        type: 'object',
-        properties: {
-          restated_goal: { type: 'string', description: 'より具体的に言い換えた目標' },
-          milestones: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: { title: { type: 'string' }, why: { type: 'string' } },
-              required: ['title', 'why'],
-              additionalProperties: false
-            }
-          },
-          week_actions: { type: 'array', items: { type: 'string' } },
-          today_step: {
-            type: 'object',
-            properties: { title: { type: 'string' }, cue: { type: 'string' } },
-            required: ['title', 'cue'],
-            additionalProperties: false
-          },
-          encouragement: { type: 'string' }
-        },
-        required: ['restated_goal', 'milestones', 'week_actions', 'today_step', 'encouragement'],
-        additionalProperties: false
-      };
-      const user =
-        `目標: ${title}\n期限: ${deadline || '未設定'}\nなりたい自分: ${identity || '未設定'}\n今日: ${today()}\n\n` +
-        'この目標を分解してください。マイルストーンは3〜5個、今週の行動(week_actions)は3個程度、' +
-        'today_step は2分でできる具体的な最初の一歩にしてください。';
-      const data = await call({
-        max_tokens: 2000,
-        system: DECOMP_SYS,
-        messages: [{ role: 'user', content: user }],
-        output_config: { format: { type: 'json_schema', schema } }
-      });
-      const txt = textOf(data);
-      try { return JSON.parse(txt); }
-      catch (e) { const err = new Error('AIの応答を解析できませんでした'); err.code = 'PARSE'; throw err; }
-    },
-
-    async chat(history, context) {
-      const data = await call({
-        max_tokens: 1024,
-        system: CHAT_SYS + '\n\n# ユーザーの現在の状況（参考）\n' + context,
-        messages: history
-      });
-      return textOf(data);
-    },
-
-    // ストリーミング版。onDelta(全文) が逐次呼ばれ、完了時に全文を返す。
-    async chatStream(history, context, onDelta) {
-      return callStream({
-        max_tokens: 1024,
-        system: CHAT_SYS + '\n\n# ユーザーの現在の状況（参考）\n' + context,
-        messages: history
-      }, onDelta);
-    }
-  };
-})();
+const PRO_STORE = 'goalflow:pro';
+const ProStore = {
+  get() { try { return JSON.parse(localStorage.getItem(PRO_STORE)) || null; } catch (e) { return null; } },
+  set(v) { try { v ? localStorage.setItem(PRO_STORE, JSON.stringify(v)) : localStorage.removeItem(PRO_STORE); } catch (e) {} }
+};
+function isProActive(p) { return !!(p && p.active); }
+// 無料ユーザーは標準アクセントに固定。Proのみ選択を反映。
+function effectiveAccent(pro, accent) { return isProActive(pro) ? (accent || 'cyan') : 'cyan'; }
+// ライセンス検証APIの応答(Lemon Squeezy形)から有効/無効を判定（純ロジック・テスト対象）。
+function interpretLicense(j) {
+  const status = j && j.license_key && j.license_key.status;
+  return !!(j && j.valid) && (!status || status === 'active');
+}
+async function validateLicense(key) {
+  key = (key || '').trim();
+  if (!key) { const e = new Error('ライセンス鍵を入力してください'); e.code = 'EMPTY'; throw e; }
+  if (!PRO.validateUrl) { const e = new Error('検証先が未設定です（オーナー設定待ち）'); e.code = 'NO_ENDPOINT'; throw e; }
+  let res;
+  try {
+    res = await fetch(PRO.validateUrl, { method: 'POST', headers: { 'content-type': 'application/json', 'accept': 'application/json' }, body: JSON.stringify({ license_key: key }) });
+  } catch (e) { const err = new Error('検証に失敗しました（オフラインの可能性）'); err.code = 'NETWORK'; throw err; }
+  let j = {}; try { j = await res.json(); } catch (e) {}
+  if (!interpretLicense(j)) { const e = new Error((j && j.error) || 'ライセンスが無効か、サブスクが有効ではありません'); e.code = 'INVALID'; throw e; }
+  return { active: true, plan: 'pro', key, checkedAt: Date.now() };
+}
 
 /* ============================================================
    State Management (Clean Start)
@@ -2205,10 +2083,15 @@ function Insight() {
 
 // ----- SETTINGS -----
 function Settings() {
-  const { state, dispatch, addToast } = useApp();
+  const { state, dispatch, addToast, pro, setPro } = useApp();
   const fileRef = useRef(null);
-  const [apiKey, setApiKey] = useState(ApiKeyStore.get());
-  const [showKey, setShowKey] = useState(false);
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const proOn = isProActive(pro);
+  const accent = effectiveAccent(pro, state.settings.accent);
+  const pickAccent = (id) => {
+    if (!proOn) { setUpgradeOpen(true); return; }
+    dispatch({ type: 'SET_SETTINGS', patch: { accent: id } });
+  };
 
   const exportData = () => {
     const blob = new Blob([JSON.stringify(state)], { type: 'application/json' });
@@ -2226,6 +2109,27 @@ function Settings() {
       <div class="glass-panel">
         <div class="module-header"><div class="holo-icon-group"><div class="holo-icon"><${Icon} n="settings"/></div><div class="holo-label">システム設定</div></div></div>
 
+        <div class="flex-between mb-2 mt-4">
+          <div class="holo-label">プラン</div>
+          ${proOn ? html`<span class="pro-badge"><${Icon} n="spark" size=12/> PRO</span>` : html`<span class="holo-label" style="margin:0;">無料</span>`}
+        </div>
+        <button class="glass-btn ${proOn ? '' : 'glass-btn--primary'} glass-btn--block mb-4" onClick=${() => setUpgradeOpen(true)}>
+          <${Icon} n="spark" size=16/> ${proOn ? 'Pro を管理' : 'Pro にアップグレード（月額・年額）'}
+        </button>
+
+        <div class="flex-between mb-2">
+          <div class="holo-label">アクセントカラー</div>
+          ${proOn ? null : html`<span class="pro-lock"><${Icon} n="lock" size=14/> Pro</span>`}
+        </div>
+        <div class="swatch-row mb-4">
+          ${ACCENTS.map(a => html`
+            <button key=${a.id} class="swatch swatch-${a.id} ${accent === a.id ? 'is-on' : ''}" aria-label=${a.label} title=${a.label}
+              onClick=${() => pickAccent(a.id)}>
+              ${accent === a.id ? html`<${Icon} n="check" size=16/>` : (!proOn && !a.free ? html`<${Icon} n="lock" size=12/>` : null)}
+            </button>
+          `)}
+        </div>
+
         <div class="holo-label mb-2 mt-4">なりたい自分（アイデンティティ）</div>
         <input class="glass-input mb-4" placeholder="例: 毎日少しずつ学ぶ人" value=${state.identity || ''} onInput=${e => dispatch({ type: 'SET_IDENTITY', identity: e.currentTarget.value })} />
 
@@ -2235,18 +2139,6 @@ function Settings() {
         </div>
         <input type="range" min="0" max="1" step="0.01" value=${state.settings.soundVolume} onInput=${e => { const v = parseFloat(e.currentTarget.value); AudioEngine.setVolume(v); dispatch({type:'SET_SETTINGS', patch:{soundVolume: v}}); }} style="width:100%; accent-color: var(--holo-cyan); margin-bottom: 24px;"/>
         
-        <div class="holo-label mb-2 mt-4">AIコーチ ・ Anthropic APIキー</div>
-        <div class="flex-row mb-2">
-          <input class="glass-input" type=${showKey ? 'text' : 'password'} placeholder="sk-ant-..." value=${apiKey}
-            autocomplete="off" autocapitalize="off" spellcheck="false"
-            onInput=${e => { const v = e.currentTarget.value; setApiKey(v); ApiKeyStore.set(v.trim()); }} />
-          <button class="glass-btn glass-btn--icon" style="width:48px;height:48px;flex-shrink:0;" aria-label=${showKey ? 'キーを隠す' : 'キーを表示'} onClick=${() => setShowKey(s => !s)}><${Icon} n=${showKey ? 'moon' : 'sun'} size=16/></button>
-        </div>
-        ${apiKey ? html`<button class="glass-btn glass-btn--danger glass-btn--block mb-2" onClick=${() => { ApiKeyStore.set(''); setApiKey(''); addToast('APIキーを削除しました', 'info'); }}>キーを削除</button>` : null}
-        <div class="holo-label mb-4" style="text-transform:none; letter-spacing:normal; opacity:0.8; line-height:1.6;">
-          キーは端末内(localStorage)にのみ保存され、AIコーチ利用時にAnthropicへ直接送信されます。バックアップ(書き出し)には含まれません。キーは <span style="color:var(--text-cyan);">console.anthropic.com</span> で取得できます。
-        </div>
-
         <div class="holo-label mb-4">データ管理</div>
         <div class="grid-2">
            <button class="glass-btn glass-btn--block" onClick=${exportData}>書き出し</button>
@@ -2257,7 +2149,7 @@ function Settings() {
         <div class="holo-label mb-4" style="margin-top: 24px;">アプリ情報</div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">バージョン</span>
-          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.2.2</span>
+          <span class="holo-data" style="color: var(--text-cyan); text-shadow: var(--text-glow-cyan);">v1.3.0</span>
         </div>
         <div class="flex-between" style="padding: 6px 0;">
           <span class="holo-label">開発者</span>
@@ -2280,6 +2172,8 @@ function Settings() {
           </div>
         </div>
       ` : null}
+
+      ${upgradeOpen ? html`<${UpgradeModal} onClose=${() => setUpgradeOpen(false)}/>` : null}
     </div>
   `;
 }
@@ -2425,217 +2319,69 @@ function AutoPlanModal({ initial, onClose, go }) {
   `;
 }
 
-// ----- AI COACH (Claude API, BYOK) -----
-// 行動変容の差別化: 目標分解（思考回路/タスクに接続）と、つまずき診断・振り返りの対話。
-function buildCoachContext(state) {
-  const t = today();
-  const todayTasks = state.tasks.filter(x => x.date === t);
-  const done = todayTasks.filter(x => x.done).length;
-  const goals = state.goals.length
-    ? state.goals.map(g => `- ${g.title}（期限 ${g.deadline || '未設定'}）`).join('\n')
-    : '（未設定）';
-  const recent7 = state.timer.sessions
-    .filter(s => dayDiff(dstr(new Date(s.t)), t) <= 7 && dayDiff(dstr(new Date(s.t)), t) >= 0)
-    .reduce((a, s) => a + s.min, 0);
-  return [
-    `なりたい自分: ${state.identity || '未設定'}`,
-    `目標:\n${goals}`,
-    `今日のタスク: ${done}/${todayTasks.length} 完了`,
-    `連続日数(ストリーク): ${state.streak}`,
-    `直近7日の集中: ${recent7} 分`
-  ].join('\n');
-}
+// ----- PRO アップグレード（ペイウォール・倫理的: 無料版は全機能維持、いつでも閉じられる） -----
+function UpgradeModal({ onClose }) {
+  const { pro, setPro, addToast } = useApp();
+  const [key, setKey] = useState((pro && pro.key) || '');
+  const [busy, setBusy] = useState(false);
+  const proOn = isProActive(pro);
 
-function Coach({ go }) {
-  const { state, dispatch, addToast } = useApp();
-  const [mode, setMode] = useState('decompose');
-  // proxy が設定されていれば全利用者が鍵不要でAI利用可。無ければ各自のキー有無で判定。
-  const [hasKey, setHasKey] = useState(ClaudeAPI.available());
-  const [autoPlan, setAutoPlan] = useState(null);
-
-  // --- 目標分解 ---
-  const [goalTitle, setGoalTitle] = useState('');
-  const [deadline, setDeadline] = useState('');
-  const [plan, setPlan] = useState(null);
-  const [planLoading, setPlanLoading] = useState(false);
-
-  // --- 対話 ---
-  const [chat, setChat] = useState([]); // {role, content}
-  const [input, setInput] = useState('');
-  const [chatLoading, setChatLoading] = useState(false);
-  const logRef = useRef(null);
-
-  useEffect(() => { if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight; }, [chat, chatLoading]);
-
-  const runDecompose = async () => {
-    const title = goalTitle.trim();
-    if (!title) return;
-    setPlan(null); setPlanLoading(true);
-    try {
-      const result = await ClaudeAPI.decompose({ title, deadline, identity: state.identity });
-      setPlan(result);
-    } catch (e) {
-      addToast(e.code === 'NO_KEY' ? 'APIキーを設定してください' : (e.message || 'エラーが発生しました'), 'info');
-      if (e.code === 'NO_KEY') setHasKey(false);
-    } finally { setPlanLoading(false); }
+  const activate = async () => {
+    setBusy(true);
+    try { const v = await validateLicense(key); setPro(v); addToast('Pro を有効化しました。ありがとうございます！', 'success'); onClose(); }
+    catch (e) { addToast(e.message || '有効化に失敗しました', 'info'); }
+    finally { setBusy(false); }
   };
-
-  const addGoalFromPlan = () => {
-    const title = (plan.restated_goal || goalTitle).trim();
-    if (!title) return;
-    dispatch({ type: 'ADD_GOAL', goal: { id: uid(), title, deadline: deadline || addDays(today(), 30) } });
-    addToast('目標を追加しました', 'success');
-  };
-  const addTodayStep = () => {
-    const tk = { id: uid(), title: plan.today_step.title.trim(), date: today(), done: false };
-    if (plan.today_step.cue) tk.cue = plan.today_step.cue.trim();
-    dispatch({ type: 'ADD_TASK', task: tk });
-    addToast('今日の一歩を追加しました', 'success');
-  };
-  const addWeekActions = () => {
-    (plan.week_actions || []).forEach((a, i) => {
-      dispatch({ type: 'ADD_TASK', task: { id: uid(), title: String(a).trim(), date: addDays(today(), i), done: false } });
-    });
-    addToast('今週の行動をタスクに追加しました', 'success');
-  };
-
-  const send = async (text) => {
-    const content = (text != null ? text : input).trim();
-    if (!content || chatLoading) return;
-    const base = [...chat, { role: 'user', content }];
-    setInput(''); setChatLoading(true);
-    // 空のアシスタント吹き出しを置き、ストリームで埋めていく。
-    setChat([...base, { role: 'assistant', content: '' }]);
-    let acc = '';
-    try {
-      acc = await ClaudeAPI.chatStream(base, buildCoachContext(state), (full) => {
-        setChat([...base, { role: 'assistant', content: full }]);
-      });
-      if (!acc) setChat([...base, { role: 'assistant', content: '（応答が空でした）' }]);
-    } catch (e) {
-      setChat([...base, { role: 'assistant', content: '⚠️ ' + (e.code === 'NO_KEY' ? 'APIキーが未設定です。設定画面で登録してください。' : (e.message || 'エラーが発生しました')) }]);
-      if (e.code === 'NO_KEY') setHasKey(false);
-    } finally { setChatLoading(false); }
-  };
-
-  if (!hasKey) {
-    return html`
-      <div class="app__inner">
-        <div class="glass-panel text-center">
-          <div class="holo-icon mb-4" style="margin:0 auto;"><${Icon} n="calendar"/></div>
-          <div style="font-weight:700; font-size:1.1rem; margin-bottom:8px; color:var(--text-cyan); text-shadow:var(--text-glow-cyan);">目標を自動で計画する</div>
-          <div class="holo-label" style="line-height:1.7; text-transform:none; letter-spacing:normal; margin-bottom:8px;">
-            目標と期限を入れるだけで、達成までの「やるべき事」をカレンダーへ自動で割り振ります。<b>APIキーは不要</b>です。
-          </div>
-          <button class="glass-btn glass-btn--primary glass-btn--block mt-4" onClick=${() => setAutoPlan({})}>
-            <${Icon} n="calendar" size=16/> 目標からカレンダーに自動で割り振る
-          </button>
-        </div>
-
-        <div class="glass-panel text-center">
-          <div class="holo-label" style="line-height:1.7; text-transform:none; letter-spacing:normal;">
-            さらにパーソナルな分解や、つまずき相談・振り返りを使いたい場合は、AIコーチ（Anthropicの自分のAPIキー）を登録できます。<b>任意</b>です。
-          </div>
-          <button class="glass-btn glass-btn--block mt-4" onClick=${() => go('settings')}>AIコーチ用のAPIキーを登録（任意）</button>
-        </div>
-
-        ${autoPlan ? html`<${AutoPlanModal} initial=${autoPlan} onClose=${() => setAutoPlan(null)} go=${go}/>` : null}
-      </div>
-    `;
-  }
+  const deactivate = () => { setPro(null); setKey(''); addToast('Pro を解除しました', 'info'); };
 
   return html`
-    <div class="app__inner">
-      <div class="glass-panel glass-panel--sm coach-seg">
-        <button class="glass-btn ${mode === 'decompose' ? 'glass-btn--primary' : ''}" onClick=${() => setMode('decompose')}><${Icon} n="branch" size=16/> 目標を分解</button>
-        <button class="glass-btn ${mode === 'chat' ? 'glass-btn--primary' : ''}" onClick=${() => setMode('chat')}><${Icon} n="message" size=16/> 相談する</button>
+    <${Modal} title=${proOn ? 'GoalFlow Pro' : 'Pro にアップグレード'} icon="spark" onClose=${onClose}>
+      <div class="holo-label mb-4" style="text-transform:none; letter-spacing:normal; line-height:1.7;">
+        基本機能（目標→カレンダー自動割り当て・タイマー・フラッシュカード・解析）は<b>ずっと無料</b>です。
+        Pro では次の付加機能が使えます。
+      </div>
+      <div class="holo-list mb-4">
+        <div class="holo-item"><${Icon} n="droplet" size=16/><div class="holo-item__text">プレミアムテーマ（アクセントカラー5種）</div></div>
+        <div class="holo-item"><${Icon} n="insight" size=16/><div class="holo-item__text">詳細な解析（順次追加）</div></div>
+        <div class="holo-item"><${Icon} n="heart" size=16/><div class="holo-item__text">開発の継続を支援</div></div>
       </div>
 
-      ${mode === 'decompose' ? html`
-        <div class="glass-panel">
-          <div class="holo-label mb-2">分解したい目標</div>
-          <select class="glass-select mb-4" onChange=${e => { const g = state.goals.find(x => x.id === e.currentTarget.value); if (g) { setGoalTitle(g.title); setDeadline(g.deadline || ''); } }}>
-            <option value="">（既存の目標から選ぶ / 下に直接入力）</option>
-            ${state.goals.map(g => html`<option key=${g.id} value=${g.id}>${g.title}</option>`)}
-          </select>
-          <input class="glass-input mb-4" placeholder="例: 半年でTOEIC800点" value=${goalTitle} onInput=${e => setGoalTitle(e.currentTarget.value)} />
-          <div class="holo-label mb-2">期限（任意）</div>
-          <input class="glass-input mb-4" type="date" value=${deadline} onInput=${e => setDeadline(e.currentTarget.value)} />
-          <button class="glass-btn glass-btn--primary glass-btn--block" disabled=${planLoading || !goalTitle.trim()} onClick=${runDecompose}>
-            ${planLoading ? 'AIが分解中…' : 'この目標をAIで分解する'}
-          </button>
+      ${proOn ? html`
+        <div class="plan-card is-best mb-4 text-center">
+          <span class="pro-badge"><${Icon} n="spark" size=12/> PRO 有効</span>
+          <div class="holo-label mt-4" style="text-transform:none; letter-spacing:normal;">ご利用ありがとうございます。</div>
         </div>
-
-        ${plan ? html`
-          <div class="glass-panel">
-            <div class="holo-label mb-2">具体化した目標</div>
-            <div style="font-weight:600; color:var(--text-cyan); text-shadow:var(--text-glow-cyan); margin-bottom:16px;">${plan.restated_goal}</div>
-
-            <div class="holo-label mb-2">マイルストーン</div>
-            <div class="holo-list mb-4">
-              ${(plan.milestones || []).map((m, i) => html`
-                <div class="holo-item" key=${i} style="flex-direction:column; align-items:flex-start; gap:4px;">
-                  <div style="font-weight:600; font-size:0.92rem;">${i + 1}. ${m.title}</div>
-                  ${m.why ? html`<div class="holo-label" style="text-transform:none; letter-spacing:normal;">${m.why}</div>` : null}
-                </div>
-              `)}
-            </div>
-
-            <div class="holo-label mb-2">今週の行動</div>
-            <div class="holo-list mb-4">
-              ${(plan.week_actions || []).map((a, i) => html`<div class="holo-item" key=${i} style="padding:10px 14px;"><div class="holo-item__text" style="font-size:0.9rem;">${a}</div></div>`)}
-            </div>
-
-            <div class="holo-label mb-2">今日の2分の一歩</div>
-            <div class="holo-item mb-4" style="flex-direction:column; align-items:flex-start; gap:4px; border-color:var(--holo-cyan);">
-              <div style="font-weight:600;">${plan.today_step.title}</div>
-              ${plan.today_step.cue ? html`<div class="cue-line"><${Icon} n="branch" size=12/> ${plan.today_step.cue} のとき</div>` : null}
-            </div>
-
-            ${plan.encouragement ? html`<div class="holo-label text-center mb-4" style="text-transform:none; letter-spacing:normal; color:var(--text-cyan);">${plan.encouragement}</div>` : null}
-
-            <div class="holo-label mb-2">アプリに反映</div>
-            <div class="holo-list">
-              <button class="glass-btn glass-btn--primary glass-btn--block" onClick=${() => setAutoPlan({ title: plan.restated_goal || goalTitle, deadline })}><${Icon} n="calendar" size=16/> この目標をカレンダーに自動で割り振る</button>
-              <button class="glass-btn glass-btn--block" onClick=${addTodayStep}><${Icon} n="plus" size=16/> 今日の一歩だけ追加</button>
-              <button class="glass-btn glass-btn--block" onClick=${addGoalFromPlan}><${Icon} n="target" size=16/> この目標を追加</button>
-              <button class="glass-btn glass-btn--block" onClick=${addWeekActions}><${Icon} n="calendar" size=16/> 今週の行動をタスク化</button>
-            </div>
-          </div>
-        ` : null}
+        <button class="glass-btn glass-btn--danger glass-btn--block" onClick=${deactivate}>この端末で Pro を解除</button>
       ` : html`
-        <div class="glass-panel">
-          <div class="chat-log" ref=${logRef}>
-            ${chat.length === 0 ? html`
-              <div class="holo-label text-center" style="padding:16px; text-transform:none; letter-spacing:normal; line-height:1.7;">
-                行動科学にもとづくコーチに相談できます。<br/>下のボタンか、自由に入力してください。
-              </div>
-            ` : chat.map((m, i) => html`<div class="chat-msg ${m.role}" key=${i}>${m.content ? m.content : (chatLoading && i === chat.length - 1 ? html`<span class="typing-dots"><span></span><span></span><span></span></span>` : '')}</div>`)}
+        <div class="grid-2 mb-4">
+          <div class="plan-card text-center">
+            <div class="holo-label" style="text-transform:none;">月額</div>
+            <div class="plan-price mt-2">${PRO.monthlyPrice}</div>
+            ${PRO.monthlyUrl ? html`<a class="glass-btn glass-btn--block mt-4" href=${PRO.monthlyUrl} target="_blank" rel="noopener noreferrer">月額で始める</a>` : html`<div class="holo-label mt-4">準備中</div>`}
           </div>
-
-          <div class="coach-chips mb-4">
-            <button class="coach-chip" onClick=${() => send('最近サボってしまって、やる気が出ません。どうすればいい？')}>つまずいた</button>
-            <button class="coach-chip" onClick=${() => send('今日の振り返りを手伝って。うまくいった点と次の一歩を整理したい。')}>今日の振り返り</button>
-            <button class="coach-chip" onClick=${() => send('目標に対して、今日まず何から始めればいい？')}>何から始める？</button>
-          </div>
-
-          <div class="flex-row">
-            <input class="glass-input" placeholder="コーチに相談…" value=${input} disabled=${chatLoading} onInput=${e => setInput(e.currentTarget.value)} onKeyDown=${e => { if (e.key === 'Enter') send(); }} />
-            <button class="glass-btn glass-btn--primary glass-btn--icon" disabled=${chatLoading || !input.trim()} onClick=${() => send()}><${Icon} n="send" size=18/></button>
+          <div class="plan-card is-best text-center">
+            <span class="pro-badge"><${Icon} n="spark" size=12/> おすすめ</span>
+            <div class="holo-label mt-2" style="text-transform:none;">年額</div>
+            <div class="plan-price">${PRO.annualPrice}</div>
+            <div class="holo-label" style="text-transform:none; letter-spacing:normal; color:var(--text-cyan);">${PRO.annualSave}</div>
+            ${PRO.annualUrl ? html`<a class="glass-btn glass-btn--primary glass-btn--block mt-4" href=${PRO.annualUrl} target="_blank" rel="noopener noreferrer">年額で始める</a>` : html`<div class="holo-label mt-4">準備中</div>`}
           </div>
         </div>
-        <div class="holo-label text-center" style="text-transform:none; letter-spacing:normal; opacity:0.75;">${ClaudeAPI.usingProxy() ? 'AIサーバー経由で送信されます。' : 'あなたのAPIキーで直接Anthropicに送信されます。'}要約された状況のみを共有します。</div>
+        <div class="holo-label mb-2" style="text-transform:none; letter-spacing:normal;">購入後に届くライセンス鍵を入力して有効化:</div>
+        <div class="flex-row">
+          <input class="glass-input" placeholder="ライセンス鍵" value=${key} onInput=${e => setKey(e.currentTarget.value)} aria-label="ライセンス鍵"/>
+          <button class="glass-btn glass-btn--primary" style="flex:0 0 auto;" disabled=${busy || !key.trim()} onClick=${activate}>${busy ? '確認中…' : '有効化'}</button>
+        </div>
+        <button class="glass-btn glass-btn--block mt-4" onClick=${onClose}>後で</button>
       `}
-
-      ${autoPlan ? html`<${AutoPlanModal} initial=${autoPlan} onClose=${() => setAutoPlan(null)} go=${go}/>` : null}
-    </div>
+    </${Modal}>
   `;
 }
 
 /* ============================================================
    App Core
    ============================================================ */
-const VIEWS = { home: Home, calendar: Calendar, maps: CircuitMap, timer: Timer, cards: Cards, goals: Goals, insight: Insight, coach: Coach, settings: Settings };
+const VIEWS = { home: Home, calendar: Calendar, maps: CircuitMap, timer: Timer, cards: Cards, goals: Goals, insight: Insight, settings: Settings };
 const TABS = [
   { id: 'home', icon: 'core', label: 'ホーム' },
   { id: 'calendar', icon: 'calendar', label: 'カレンダー' },
@@ -2644,7 +2390,6 @@ const TABS = [
   { id: 'timer', icon: 'timer', label: '集中タイマー' },
   { id: 'cards', icon: 'layers', label: 'フラッシュカード' },
   { id: 'insight', icon: 'insight', label: '解析' },
-  { id: 'coach', icon: 'message', label: 'AIコーチ' },
   { id: 'settings', icon: 'settings', label: '設定' }
 ];
 
@@ -2659,6 +2404,8 @@ function App() {
   const [tab, setTab] = useState('home');
   const [toasts, setToasts] = useState([]);
   const [confirmReq, setConfirmReq] = useState(null); // { message, resolve }
+  const [pro, setProState] = useState(ProStore.get());
+  const setPro = useCallback((v) => { ProStore.set(v); setProState(v); }, []);
 
   const addToast = useCallback((text, kind = 'info') => {
     const id = uid();
@@ -2678,6 +2425,17 @@ function App() {
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', state.settings.theme); }, [state.settings.theme]);
 
+  // アクセントカラー（Proのみ反映。無料は標準cyan）。
+  useEffect(() => { document.documentElement.setAttribute('data-accent', effectiveAccent(pro, state.settings.accent)); }, [pro, state.settings.accent]);
+
+  // 起動時にライセンスをベストエフォートで再検証（無効が確定した時だけ解除。オフライン等では維持）。
+  useEffect(() => {
+    const p = ProStore.get();
+    if (p && p.key && PRO.validateUrl) {
+      validateLicense(p.key).then(v => setPro(v)).catch(e => { if (e.code === 'INVALID') setPro(null); });
+    }
+  }, []);
+
   const toggleTheme = () => {
     const next = state.settings.theme === 'dark' ? 'light' : 'dark';
     dispatch({ type: 'SET_SETTINGS', patch: { theme: next } });
@@ -2690,7 +2448,7 @@ function App() {
   const currentLabel = (TABS.find(t => t.id === tab) || {}).label || '';
 
   return html`
-    <${Ctx.Provider} value=${{ state, dispatch, addToast, confirm }}>
+    <${Ctx.Provider} value=${{ state, dispatch, addToast, confirm, pro, setPro }}>
 
       ${onboarding ? html`<${Onboarding} />` : null}
 
