@@ -1,0 +1,7 @@
+# デモ/確認用の一時生成物（アプリ本体は index.html のみ）
+node_modules/
+package.json
+package-lock.json
+scratch_demo.js
+demo.png
+*.png
