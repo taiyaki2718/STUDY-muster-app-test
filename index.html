@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>勉強借金 StudyDebt — サボると利息がつく勉強アプリ</title>
+<meta name="description" content="やるべき勉強を「借金」として可視化。締切までにこなさないと複利で利息が膨らむ、先延ばし撲滅アプリ。" />
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2330; --line:#2a3340;
+    --txt:#e6edf3; --sub:#8b97a6; --accent:#3b82f6; --good:#22c55e;
+    --warn:#f59e0b; --bad:#ef4444; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--bg); color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Hiragino Sans","Noto Sans JP",sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:880px; margin:0 auto; padding:20px 16px 80px}
+  header{display:flex; align-items:baseline; gap:10px; flex-wrap:wrap; margin-bottom:4px}
+  header h1{font-size:24px; margin:0; letter-spacing:.5px}
+  header .tag{font-size:12px; color:var(--sub); border:1px solid var(--line); padding:2px 8px; border-radius:999px}
+  .lede{color:var(--sub); font-size:14px; margin:0 0 20px}
+
+  .hero{
+    background:linear-gradient(135deg,#3a0d12,#161b22 60%);
+    border:1px solid var(--line); border-radius:var(--radius);
+    padding:22px; margin-bottom:18px; text-align:center;
+  }
+  .hero .label{color:var(--sub); font-size:13px; letter-spacing:1px}
+  .debt{font-size:46px; font-weight:800; margin:6px 0; font-variant-numeric:tabular-nums;
+    transition:color .3s}
+  .hero .meta{color:var(--sub); font-size:13px}
+  .hero .meta b{color:var(--txt)}
+
+  .grid{display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:18px}
+  .stat{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:14px}
+  .stat .k{color:var(--sub); font-size:12px}
+  .stat .v{font-size:20px; font-weight:700; font-variant-numeric:tabular-nums}
+
+  h2{font-size:15px; color:var(--sub); text-transform:uppercase; letter-spacing:1px; margin:24px 0 10px}
+
+  .card{background:var(--panel); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:12px}
+  .task{display:flex; flex-direction:column; gap:10px}
+  .task .top{display:flex; justify-content:space-between; align-items:flex-start; gap:10px}
+  .task .name{font-weight:700; font-size:16px}
+  .task .due{font-size:12px; color:var(--sub)}
+  .task .amount{font-weight:800; font-variant-numeric:tabular-nums; white-space:nowrap}
+
+  .bar{height:9px; background:#0b0f14; border-radius:999px; overflow:hidden; border:1px solid var(--line)}
+  .bar > i{display:block; height:100%; background:var(--good); border-radius:999px; transition:width .4s}
+
+  .row{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+  .pill{font-size:11px; padding:2px 8px; border-radius:999px; border:1px solid var(--line); color:var(--sub)}
+  .pill.on-track{color:var(--good); border-color:#1d4a2e}
+  .pill.behind{color:var(--bad); border-color:#5a1f1f}
+
+  input,button{font-family:inherit; font-size:14px}
+  input[type=text],input[type=number],input[type=date]{
+    background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+    padding:9px 11px; border-radius:10px; outline:none;
+  }
+  input:focus{border-color:var(--accent)}
+  .form-grid{display:grid; grid-template-columns:1.6fr 1fr 1.2fr auto; gap:8px; align-items:center}
+  label{font-size:11px; color:var(--sub); display:block; margin-bottom:3px}
+
+  button{cursor:pointer; border:none; border-radius:10px; padding:9px 14px; font-weight:600; color:#fff; background:var(--accent)}
+  button.ghost{background:transparent; border:1px solid var(--line); color:var(--sub)}
+  button.pay{background:var(--good)}
+  button.sm{padding:6px 10px; font-size:12px}
+  button:active{transform:translateY(1px)}
+
+  .empty{color:var(--sub); text-align:center; padding:30px; border:1px dashed var(--line); border-radius:var(--radius)}
+  footer{margin-top:40px; color:var(--sub); font-size:12px; text-align:center; border-top:1px solid var(--line); padding-top:16px}
+  footer a{color:var(--accent); text-decoration:none}
+
+  .note{font-size:12px; color:var(--sub); background:var(--panel2); border:1px solid var(--line);
+    border-radius:10px; padding:10px 12px; margin-top:8px}
+
+  @media(max-width:620px){
+    .grid{grid-template-columns:1fr 1fr}
+    .form-grid{grid-template-columns:1fr 1fr; }
+    .form-grid .full{grid-column:1 / -1}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>勉強借金</h1>
+    <span class="tag">StudyDebt</span>
+  </header>
+  <p class="lede">やるべき勉強は「借金」だ。締切までにこなさないと <b>複利で利息</b> が膨らむ。サボった分だけ数字が痛い。</p>
+
+  <div class="hero">
+    <div class="label">現在の負債総額</div>
+    <div class="debt" id="totalDebt">¥0</div>
+    <div class="meta">今日返すべき最低額 <b id="dailyDue">¥0</b> ／ 放置すると明日 <b id="tomorrowDebt">¥0</b> に</div>
+  </div>
+
+  <div class="grid">
+    <div class="stat"><div class="k">抱えている科目</div><div class="v" id="statCount">0</div></div>
+    <div class="stat"><div class="k">今日返済した額</div><div class="v" id="statPaid">¥0</div></div>
+    <div class="stat"><div class="k">完済までの平均日数</div><div class="v" id="statDays">—</div></div>
+  </div>
+
+  <h2>借金を追加</h2>
+  <div class="card">
+    <div class="form-grid">
+      <div class="full" style="grid-column:1/2">
+        <label>科目・タスク名</label>
+        <input type="text" id="fName" placeholder="例: 線形代数 期末" />
+      </div>
+      <div>
+        <label>総量（ページ/問/時間）</label>
+        <input type="number" id="fAmount" min="1" placeholder="200" />
+      </div>
+      <div>
+        <label>締切</label>
+        <input type="date" id="fDue" />
+      </div>
+      <div style="align-self:end">
+        <button id="addBtn">追加</button>
+      </div>
+    </div>
+    <div class="note">利息モデル: 1単位の勉強 = ¥100換算。残量を「締切までの残り日数」で割った額が日々の最低返済。1日サボると、その遅れが翌日以降の返済額に複利（既定 8%/日）で上乗せされる。</div>
+  </div>
+
+  <h2>抱えている借金</h2>
+  <div id="list"></div>
+
+  <footer>
+    <p>すべてのデータはこの端末のブラウザ内（localStorage）にのみ保存されます。サーバー送信なし。</p>
+    <p id="proLine"></p>
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var YEN_PER_UNIT = 100;     // 1単位あたりの円換算
+  var DAILY_INTEREST = 0.08;  // 1日サボった遅れにつく複利
+  var KEY = "studydebt.v1";
+
+  var state = load();
+
+  function load(){
+    try{
+      var raw = localStorage.getItem(KEY);
+      if(raw){ var s = JSON.parse(raw); if(s && Array.isArray(s.tasks)) return s; }
+    }catch(e){}
+    return { tasks:[], paidToday:0, paidDate:todayStr() };
+  }
+  function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+
+  function todayStr(){ return new Date().toISOString().slice(0,10); }
+  function daysBetween(a,b){
+    var ms = (new Date(b+"T00:00:00") - new Date(a+"T00:00:00"));
+    return Math.round(ms/86400000);
+  }
+  function yen(n){ return "¥" + Math.max(0,Math.round(n)).toLocaleString("ja-JP"); }
+
+  // 期待ペース vs 実績から「遅れ日数」を出し、複利で利息を乗せる
+  function compute(task){
+    var today = todayStr();
+    var totalDays = Math.max(1, daysBetween(task.created, task.due));
+    var elapsed = Math.min(totalDays, Math.max(0, daysBetween(task.created, today)));
+    var remainDays = Math.max(0, daysBetween(today, task.due));
+
+    var expectedDone = task.amount * (elapsed/totalDays);     // 本来終わってるべき量
+    var behindUnits = Math.max(0, expectedDone - task.done);  // 遅れている量
+    var remainUnits = Math.max(0, task.amount - task.done);
+
+    var base = remainUnits * YEN_PER_UNIT;
+    // 締切超過 or 遅れに対して複利ペナルティ
+    var lateDays = remainDays === 0 ? Math.max(0, daysBetween(task.due, today)) : 0;
+    var behindDays = behindUnits > 0 && remainDays>0 ? behindUnits / (task.amount/totalDays) : 0;
+    var penaltyDays = lateDays + behindDays;
+    var debt = base * Math.pow(1 + DAILY_INTEREST, penaltyDays);
+
+    var dailyDue = remainDays > 0 ? (remainUnits * YEN_PER_UNIT) / remainDays : base;
+    var onTrack = behindUnits <= 0.5 && remainUnits > 0;
+    var done = remainUnits <= 0;
+
+    return {
+      debt:debt, base:base, dailyDue:dailyDue, remainUnits:remainUnits,
+      remainDays:remainDays, onTrack:onTrack, done:done,
+      progress: task.amount>0 ? Math.min(1, task.done/task.amount) : 1,
+      penaltyDays:penaltyDays
+    };
+  }
+
+  function rollDay(){
+    if(state.paidDate !== todayStr()){ state.paidToday = 0; state.paidDate = todayStr(); }
+  }
+
+  function render(){
+    rollDay();
+    var list = document.getElementById("list");
+    list.innerHTML = "";
+    var total=0, totalDaily=0, tomorrow=0, active=0, daysSum=0, daysN=0;
+
+    if(state.tasks.length === 0){
+      list.innerHTML = '<div class="empty">まだ借金はありません。上のフォームから締切のある勉強を登録しましょう。</div>';
+    }
+
+    state.tasks.forEach(function(t){
+      var c = compute(t);
+      if(!c.done){ total += c.debt; totalDaily += c.dailyDue; active++;
+        tomorrow += c.done ? 0 : c.base * Math.pow(1+DAILY_INTEREST, c.penaltyDays+1);
+        if(c.remainDays>0 && c.dailyDue>0){ daysSum += c.remainUnits/(t.amount); daysN++; }
+      }
+
+      var el = document.createElement("div");
+      el.className = "card task";
+      el.innerHTML =
+        '<div class="top">'+
+          '<div>'+
+            '<div class="name">'+esc(t.name)+'</div>'+
+            '<div class="due">締切 '+t.due+'／残り '+c.remainDays+'日 ・ '+
+              Math.round(c.remainUnits)+' / '+t.amount+' 残</div>'+
+          '</div>'+
+          '<div class="amount" style="color:'+(c.done?"var(--good)":(c.onTrack?"var(--txt)":"var(--bad)"))+'">'+
+            (c.done? "完済 ✓" : yen(c.debt))+'</div>'+
+        '</div>'+
+        '<div class="bar"><i style="width:'+(c.progress*100).toFixed(0)+'%;'+
+          (c.done?"background:var(--good)":"")+'"></i></div>'+
+        '<div class="row" style="justify-content:space-between">'+
+          '<div class="row">'+
+            (c.done? '<span class="pill on-track">完了</span>' :
+              (c.onTrack? '<span class="pill on-track">ペース順調</span>'
+                        : '<span class="pill behind">遅延・利息発生中</span>'))+
+            (c.done? '' : '<span class="pill">今日 '+yen(c.dailyDue)+' 返済</span>')+
+          '</div>'+
+          '<div class="row">'+
+            (c.done? '' :
+              '<button class="pay sm" data-pay="'+t.id+'">+1 やった</button>'+
+              '<button class="pay sm" data-pay10="'+t.id+'">+10</button>')+
+            '<button class="ghost sm" data-del="'+t.id+'">削除</button>'+
+          '</div>'+
+        '</div>';
+      list.appendChild(el);
+    });
+
+    document.getElementById("totalDebt").textContent = yen(total);
+    document.getElementById("totalDebt").style.color =
+      total===0 ? "var(--good)" : (totalDaily>0 && total > totalDaily*3 ? "var(--bad)" : "var(--txt)");
+    document.getElementById("dailyDue").textContent = yen(totalDaily);
+    document.getElementById("tomorrowDebt").textContent = yen(tomorrow);
+    document.getElementById("statCount").textContent = active;
+    document.getElementById("statPaid").textContent = yen(state.paidToday);
+    document.getElementById("statDays").textContent =
+      active===0 ? "—" : Math.max(1,Math.round(state.tasks.reduce(function(a,t){
+        var c=compute(t); return a + (c.done?0:c.remainDays);
+      },0)/Math.max(1,active))) + "日";
+
+    document.getElementById("proLine").innerHTML =
+      total>0
+        ? "今の負債を毎日きっちり返せば、利息ゼロで完済できます。サボった瞬間から数字が膨らみます。"
+        : "負債ゼロ。最高の状態です。";
+
+    save();
+  }
+
+  function esc(s){ return String(s).replace(/[&<>"]/g,function(m){
+    return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[m]; }); }
+
+  function addTask(){
+    var name = document.getElementById("fName").value.trim();
+    var amount = parseInt(document.getElementById("fAmount").value,10);
+    var due = document.getElementById("fDue").value;
+    if(!name || !amount || amount<1 || !due){ alert("名前・総量・締切をすべて入力してください。"); return; }
+    if(daysBetween(todayStr(), due) < 0){ alert("締切は今日以降にしてください。"); return; }
+    state.tasks.push({ id:Date.now()+""+Math.floor(Math.random()*999),
+      name:name, amount:amount, done:0, created:todayStr(), due:due });
+    document.getElementById("fName").value="";
+    document.getElementById("fAmount").value="";
+    document.getElementById("fDue").value="";
+    render();
+  }
+
+  function pay(id, n){
+    var t = state.tasks.find(function(x){return x.id===id;});
+    if(!t) return;
+    var before = t.done;
+    t.done = Math.min(t.amount, t.done + n);
+    var gained = (t.done - before) * YEN_PER_UNIT;
+    state.paidToday += gained;
+    render();
+  }
+
+  document.getElementById("addBtn").addEventListener("click", addTask);
+  document.getElementById("fName").addEventListener("keydown", function(e){ if(e.key==="Enter") addTask(); });
+  document.getElementById("list").addEventListener("click", function(e){
+    var b = e.target.closest("button"); if(!b) return;
+    if(b.dataset.del){ if(confirm("この借金を削除しますか？")){
+      state.tasks = state.tasks.filter(function(x){return x.id!==b.dataset.del;}); render(); } }
+    else if(b.dataset.pay){ pay(b.dataset.pay, 1); }
+    else if(b.dataset.pay10){ pay(b.dataset.pay10, 10); }
+  });
+
+  // 締切の初期値=2週間後
+  (function(){
+    var d = new Date(); d.setDate(d.getDate()+14);
+    document.getElementById("fDue").value = d.toISOString().slice(0,10);
+  })();
+
+  render();
+})();
+</script>
+</body>
+</html>
