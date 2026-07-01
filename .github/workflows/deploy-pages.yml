@@ -2,7 +2,7 @@ name: Deploy demo to GitHub Pages
 
 on:
   push:
-    branches: ["claude/fitness-training-app-qykn33"]
+    branches: ["main", "claude/fitness-training-app-qykn33"]
   workflow_dispatch:
 
 permissions:
